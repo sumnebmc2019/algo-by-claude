@@ -1,0 +1,97 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Trading Bot Specific
+logs/
+trades/
+data/cache/
+data/temp/
+*.csv.log
+*.log.*
+
+# Config secrets (CRITICAL - Never commit)
+config/secrets.yaml
+config/secrets.json
+.env
+.env.local
+.env.*.local
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+*.pytest_cache
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Jupyter
+.ipynb_checkpoints
+*.ipynb_checkpoints
+
+# Python packaging
+dist/
+build/
+*.egg-info/
+*.egg
+
+# C extensions
+*.so
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# pyenv
+.python-version
+
+# Trading Data (Large files)
+data/raw/
+data/angel/*.zip
+data/zerodha/*.csv~
+data/upstox/*.csv~
+
+# Docker
+.dockerignore
+
+# Azure VM specific
+*.pid
+nohup.out

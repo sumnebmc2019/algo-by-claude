@@ -1,4 +1,4 @@
-# config/secrets.yaml
+# strategies/base_strategy.py
 """
 Base Strategy Class - All strategies must inherit from this
 """

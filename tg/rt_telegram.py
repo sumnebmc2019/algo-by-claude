@@ -1,0 +1,640 @@
+# config/secrets.yaml
+"""
+Realtime Bot Telegram Interface
+"""
+
+import asyncio
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from typing import Dict, Any
+from utils.helpers import load_secrets, format_pnl, format_number
+from utils.logger import setup_logger
+
+logger = setup_logger(__name__, "realtime")
+
+class RealtimeTelegramBot:
+    """Telegram interface for Realtime Bot"""
+    
+    def __init__(self, bot_controller):
+        """
+        Initialize telegram bot
+        
+        Args:
+            bot_controller: Reference to main bot controller
+        """
+        self.bot_controller = bot_controller
+        secrets = load_secrets()
+        self.token = secrets['telegram']['realtime']['bot_token']
+        self.chat_id = secrets['telegram']['realtime']['chat_id']
+        self.app = None
+    
+    async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /start command"""
+        keyboard = [
+            [InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
+            [InlineKeyboardButton("📊 Stats", callback_data="stats")],
+            [InlineKeyboardButton("📈 Positions", callback_data="positions")],
+            [InlineKeyboardButton("🛑 Close All", callback_data="close_all")],
+            [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = (
+            "🤖 *ALGO BY GUGAN - Realtime Bot*\n\n"
+            "Select an option below:"
+        )
+        
+        await update.message.reply_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def settings_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Display settings menu"""
+        query = update.callback_query
+        await query.answer()
+        
+        keyboard = [
+            [InlineKeyboardButton("📍 Segment/Symbols", callback_data="set_symbols")],
+            [InlineKeyboardButton("🏦 Broker", callback_data="set_broker")],
+            [InlineKeyboardButton("💰 Capital", callback_data="set_capital")],
+            [InlineKeyboardButton("⚠️ Risk", callback_data="set_risk")],
+            [InlineKeyboardButton("🔢 Max Trades", callback_data="set_max_trades")],
+            [InlineKeyboardButton("📊 Strategies", callback_data="set_strategies")],
+            [InlineKeyboardButton("🔄 Paper/Live", callback_data="toggle_mode")],
+            [InlineKeyboardButton("« Back", callback_data="main_menu")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        settings = self.bot_controller.get_settings()
+        
+        message = (
+            "⚙️ *Current Settings*\n\n"
+            f"🏦 Broker: `{settings['broker']}`\n"
+            f"📍 Segment: `{settings['segment']}`\n"
+            f"💰 Capital: `{format_number(settings['capital'])}`\n"
+            f"⚠️ Risk: `{settings['risk_per_trade']}%`\n"
+            f"🔢 Max Trades: `{settings['max_trades']}`\n"
+            f"🔄 Mode: `{settings['mode'].upper()}`\n"
+            f"📊 Active Strategies: `{len(settings['active_strategies'])}`\n"
+            f"📈 Active Symbols: `{len(settings['active_symbols'])}`\n"
+        )
+        
+        await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def stats_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Display statistics"""
+        query = update.callback_query
+        await query.answer()
+        
+        stats = self.bot_controller.get_stats()
+        
+        keyboard = [[InlineKeyboardButton("« Back", callback_data="main_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = (
+            "📊 *Statistics & Performance*\n\n"
+            f"*Open Positions:* `{stats['open_positions']}`\n"
+            f"*Closed Positions:* `{stats['closed_positions']}`\n\n"
+            f"*Realized PnL:* {format_pnl(stats['realized_pnl'])}\n"
+            f"*Unrealized PnL:* {format_pnl(stats['unrealized_pnl'])}\n"
+            f"*Total PnL:* {format_pnl(stats['total_pnl'])}\n\n"
+            f"*Win Rate:* `{stats['win_rate']:.2f}%`\n"
+            f"*Winning Trades:* `{stats['winning_trades']}`\n"
+            f"*Losing Trades:* `{stats['losing_trades']}`\n"
+        )
+        
+        await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def positions_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Display open positions"""
+        query = update.callback_query
+        await query.answer()
+        
+        positions = self.bot_controller.get_open_positions()
+        
+        keyboard = [[InlineKeyboardButton("« Back", callback_data="main_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if not positions:
+            message = "📈 *Open Positions*\n\nNo open positions"
+        else:
+            message = "📈 *Open Positions*\n\n"
+            for pos in positions:
+                ltp = self.bot_controller.get_ltp(pos['symbol'])
+                current_pnl = self.bot_controller.calculate_position_pnl(pos, ltp)
+                
+                message += (
+                    f"*{pos['symbol']}* ({pos['strategy']})\n"
+                    f"Action: `{pos['action']}`\n"
+                    f"Qty: `{pos['quantity']}`\n"
+                    f"Entry: `₹{pos['entry_price']:.2f}`\n"
+                    f"LTP: `₹{ltp:.2f}`\n"
+                    f"PnL: {format_pnl(current_pnl)}\n"
+                    f"SL: `₹{pos['stop_loss']:.2f}` | Target: `₹{pos['target']:.2f}`\n\n"
+                )
+        
+        await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def close_all_confirm(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Confirm close all positions"""
+        query = update.callback_query
+        await query.answer()
+        
+        keyboard = [
+            [InlineKeyboardButton("✅ Yes, Close All", callback_data="close_all_confirmed")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="main_menu")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = (
+            "⚠️ *Close All Positions*\n\n"
+            "Are you sure you want to close ALL open positions at current market price?\n\n"
+            "This action cannot be undone!"
+        )
+        
+        await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def close_all_execute(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Execute close all positions"""
+        query = update.callback_query
+        await query.answer()
+        
+        result = self.bot_controller.close_all_positions()
+        
+        keyboard = [[InlineKeyboardButton("« Back", callback_data="main_menu")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = (
+            f"✅ *Positions Closed*\n\n"
+            f"Closed {result['count']} positions\n"
+            f"Total PnL: {format_pnl(result['total_pnl'])}"
+        )
+        
+        await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def button_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle button callbacks"""
+        query = update.callback_query
+        data = query.data
+        
+        if data == "settings":
+            await self.settings_menu(update, context)
+        elif data == "stats":
+            await self.stats_menu(update, context)
+        elif data == "positions":
+            await self.positions_menu(update, context)
+        elif data == "close_all":
+            await self.close_all_confirm(update, context)
+        elif data == "close_all_confirmed":
+            await self.close_all_execute(update, context)
+        elif data == "main_menu" or data == "refresh":
+            await self.show_main_menu(update, context)
+        elif data == "set_symbols":
+            await self.set_symbols_menu(update, context)
+        elif data == "set_broker":
+            await self.set_broker_menu(update, context)
+        elif data == "set_capital":
+            await self.set_capital_menu(update, context)
+        elif data == "set_risk":
+            await self.set_risk_menu(update, context)
+        elif data == "set_max_trades":
+            await self.set_max_trades_menu(update, context)
+        elif data == "set_strategies":
+            await self.set_strategies_menu(update, context)
+        elif data == "toggle_mode":
+            await self.toggle_mode_menu(update, context)
+        elif data.startswith("risk_"):
+            risk_value = data.split("_")[1]
+            self.bot_controller.update_settings('risk_per_trade', float(risk_value))
+            await query.answer(f"Risk set to {risk_value}%", show_alert=True)
+            await self.settings_menu(update, context)
+        elif data.startswith("maxtrades_"):
+            max_trades = int(data.split("_")[1])
+            self.bot_controller.update_settings('max_trades', max_trades)
+            await query.answer(f"Max trades set to {max_trades}", show_alert=True)
+            await self.settings_menu(update, context)
+        elif data.startswith("broker_"):
+            broker = data.split("_")[1]
+            self.bot_controller.update_settings('broker', broker)
+            await query.answer(f"Broker set to {broker}", show_alert=True)
+            await self.settings_menu(update, context)
+        elif data.startswith("strategy_"):
+            strategy_name = "5EMA_PowerOfStocks" if data == "strategy_5ema" else "SMA_Crossover"
+            current_strategies = self.bot_controller.get_settings()['active_strategies']
+            if strategy_name in current_strategies:
+                current_strategies.remove(strategy_name)
+                await query.answer(f"Disabled {strategy_name}", show_alert=False)
+            else:
+                current_strategies.append(strategy_name)
+                await query.answer(f"Enabled {strategy_name}", show_alert=False)
+            self.bot_controller.update_settings('active_strategies', current_strategies)
+            await self.set_strategies_menu(update, context)
+        elif data.startswith("mode_"):
+            mode = data.split("_")[1]
+            if mode == "live":
+                # Show warning before switching to live
+                keyboard = [
+                    [InlineKeyboardButton("✅ Yes, Go Live", callback_data="confirm_live")],
+                    [InlineKeyboardButton("❌ Cancel", callback_data="toggle_mode")]
+                ]
+                reply_markup = InlineKeyboardMarkup(keyboard)
+                message = (
+                    "⚠️ *CONFIRM LIVE TRADING*\n\n"
+                    "You are about to switch to LIVE trading mode.\n"
+                    "Real money will be at risk!\n\n"
+                    "Are you sure you want to continue?"
+                )
+                await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+            else:
+                self.bot_controller.update_settings('mode', mode)
+                await query.answer("Switched to Paper mode", show_alert=True)
+                await self.settings_menu(update, context)
+        elif data == "confirm_live":
+            self.bot_controller.update_settings('mode', 'live')
+            await query.answer("⚠️ LIVE MODE ACTIVATED", show_alert=True)
+            await self.settings_menu(update, context)
+        else:
+            await query.answer("Feature coming soon!", show_alert=True)
+    
+    async def set_symbols_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Symbol selection menu"""
+        query = update.callback_query
+        await query.answer()
+        
+        keyboard = [[InlineKeyboardButton("« Back", callback_data="settings")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = (
+            "📍 *Symbol Selection*\n\n"
+            "To add symbols:\n"
+            "1. Use command: `/addsymbol SEGMENT SYMBOL`\n"
+            "   Example: `/addsymbol NSE_FO NIFTY24JANFUT`\n\n"
+            "2. To remove: `/removesymbol SYMBOL`\n"
+            "   Example: `/removesymbol NIFTY24JANFUT`\n\n"
+            "3. To list active: `/listsymbols`\n\n"
+            f"Currently active symbols: {len(self.bot_controller.get_settings()['active_symbols'])}"
+        )
+        
+        await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def set_broker_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Broker selection menu"""
+        query = update.callback_query
+        await query.answer()
+        
+        settings = self.bot_controller.get_settings()
+        
+        keyboard = [
+            [InlineKeyboardButton("AngelOne", callback_data="broker_angelone")],
+            [InlineKeyboardButton("Zerodha", callback_data="broker_zerodha")],
+            [InlineKeyboardButton("« Back", callback_data="settings")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = (
+            f"🏦 *Broker Selection*\n\n"
+            f"Current broker: `{settings['broker']}`\n\n"
+            "Select a broker:"
+        )
+        
+        await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def set_capital_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Capital setting menu"""
+        query = update.callback_query
+        await query.answer()
+        
+        settings = self.bot_controller.get_settings()
+        
+        keyboard = [[InlineKeyboardButton("« Back", callback_data="settings")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = (
+            f"💰 *Capital Setting*\n\n"
+            f"Current capital: {format_number(settings['capital'])}\n\n"
+            "To change capital, use command:\n"
+            "`/setcapital AMOUNT`\n\n"
+            "Example: `/setcapital 100000`"
+        )
+        
+        await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def set_risk_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Risk setting menu"""
+        query = update.callback_query
+        await query.answer()
+        
+        settings = self.bot_controller.get_settings()
+        
+        keyboard = [
+            [InlineKeyboardButton("1%", callback_data="risk_1")],
+            [InlineKeyboardButton("2%", callback_data="risk_2")],
+            [InlineKeyboardButton("3%", callback_data="risk_3")],
+            [InlineKeyboardButton("5%", callback_data="risk_5")],
+            [InlineKeyboardButton("« Back", callback_data="settings")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = (
+            f"⚠️ *Risk per Trade*\n\n"
+            f"Current risk: `{settings['risk_per_trade']}%`\n\n"
+            "Select risk percentage:"
+        )
+        
+        await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def set_max_trades_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Max trades setting menu"""
+        query = update.callback_query
+        await query.answer()
+        
+        settings = self.bot_controller.get_settings()
+        
+        keyboard = [
+            [InlineKeyboardButton("3", callback_data="maxtrades_3")],
+            [InlineKeyboardButton("5", callback_data="maxtrades_5")],
+            [InlineKeyboardButton("8", callback_data="maxtrades_8")],
+            [InlineKeyboardButton("10", callback_data="maxtrades_10")],
+            [InlineKeyboardButton("« Back", callback_data="settings")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = (
+            f"🔢 *Maximum Trades*\n\n"
+            f"Current limit: `{settings['max_trades']}`\n\n"
+            "Select maximum simultaneous trades:"
+        )
+        
+        await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def set_strategies_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Strategy selection menu"""
+        query = update.callback_query
+        await query.answer()
+        
+        settings = self.bot_controller.get_settings()
+        active_strategies = settings['active_strategies']
+        
+        keyboard = [
+            [InlineKeyboardButton(
+                f"{'✅' if '5EMA_PowerOfStocks' in active_strategies else '☐'} 5 EMA Power of Stocks",
+                callback_data="strategy_5ema"
+            )],
+            [InlineKeyboardButton(
+                f"{'✅' if 'SMA_Crossover' in active_strategies else '☐'} SMA Crossover",
+                callback_data="strategy_sma"
+            )],
+            [InlineKeyboardButton("« Back", callback_data="settings")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = (
+            f"📊 *Strategy Selection*\n\n"
+            f"Active strategies: {len(active_strategies)}\n\n"
+            "Click to toggle strategies:"
+        )
+        
+        await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def toggle_mode_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Toggle paper/live mode"""
+        query = update.callback_query
+        await query.answer()
+        
+        settings = self.bot_controller.get_settings()
+        current_mode = settings['mode']
+        
+        keyboard = [
+            [InlineKeyboardButton(
+                f"{'🟢' if current_mode == 'paper' else '⚪'} Paper Trading",
+                callback_data="mode_paper"
+            )],
+            [InlineKeyboardButton(
+                f"{'🔴' if current_mode == 'live' else '⚪'} Live Trading",
+                callback_data="mode_live"
+            )],
+            [InlineKeyboardButton("« Back", callback_data="settings")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = (
+            f"🔄 *Trading Mode*\n\n"
+            f"Current mode: `{current_mode.upper()}`\n\n"
+            "⚠️ *Warning*: Live mode will execute real trades!\n"
+            "Only switch after thorough testing.\n\n"
+            "Select mode:"
+        )
+        
+        await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def show_main_menu(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Show main menu (for callback queries)"""
+        query = update.callback_query
+        await query.answer()
+        
+        keyboard = [
+            [InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
+            [InlineKeyboardButton("📊 Stats", callback_data="stats")],
+            [InlineKeyboardButton("📈 Positions", callback_data="positions")],
+            [InlineKeyboardButton("🛑 Close All", callback_data="close_all")],
+            [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        message = (
+            "🤖 *ALGO BY GUGAN - Realtime Bot*\n\n"
+            "Select an option below:"
+        )
+        
+        await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
+    
+    async def send_trade_notification(self, trade_data: Dict[str, Any]):
+        """Send trade notification"""
+        message = (
+            f"{'📈' if trade_data['action'] == 'BUY' else '📉'} *Trade Alert*\n\n"
+            f"Symbol: `{trade_data['symbol']}`\n"
+            f"Action: `{trade_data['action']}`\n"
+            f"Quantity: `{trade_data['quantity']}`\n"
+            f"Price: `₹{trade_data['price']:.2f}`\n"
+            f"Strategy: `{trade_data['strategy']}`\n"
+            f"Mode: `{trade_data['mode'].upper()}`\n"
+        )
+        
+        await self.app.bot.send_message(
+            chat_id=self.chat_id,
+            text=message,
+            parse_mode='Markdown'
+        )
+    
+    def start(self):
+        """Start the telegram bot (deprecated - use start_async)"""
+        import asyncio
+        asyncio.run(self.start_async())
+    
+    async def start_async(self):
+        """Start the telegram bot asynchronously"""
+        from telegram.ext import ApplicationBuilder
+        from telegram.request import HTTPXRequest
+        
+        # Create custom request with longer timeout
+        request = HTTPXRequest(
+            connection_pool_size=8,
+            connect_timeout=30.0,
+            read_timeout=30.0,
+            write_timeout=30.0,
+            pool_timeout=30.0
+        )
+        
+        self.app = ApplicationBuilder().token(self.token).request(request).build()
+        
+        # Add error handler
+        self.app.add_error_handler(self.error_handler)
+        
+        # Add handlers
+        self.app.add_handler(CommandHandler("start", self.start_command))
+        self.app.add_handler(CallbackQueryHandler(self.button_handler))
+        
+        # Add command handlers for settings
+        self.app.add_handler(CommandHandler("addsymbol", self.add_symbol_command))
+        self.app.add_handler(CommandHandler("removesymbol", self.remove_symbol_command))
+        self.app.add_handler(CommandHandler("listsymbols", self.list_symbols_command))
+        self.app.add_handler(CommandHandler("setcapital", self.set_capital_command))
+        
+        # Start bot
+        logger.info("Starting Realtime Telegram Bot")
+        await self.app.initialize()
+        await self.app.start()
+        await self.app.updater.start_polling(drop_pending_updates=True)
+        
+        # Keep running
+        try:
+            while True:
+                await asyncio.sleep(1)
+        except asyncio.CancelledError:
+            logger.info("Telegram bot stopping...")
+        finally:
+            await self.app.updater.stop()
+            await self.app.stop()
+            await self.app.shutdown()
+    
+    async def error_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle errors"""
+        logger.error(f"Telegram error: {context.error}", exc_info=context.error)
+        
+        # Try to notify user
+        try:
+            if update and update.effective_message:
+                await update.effective_message.reply_text(
+                    "⚠️ An error occurred. Please try again."
+                )
+        except Exception as e:
+            logger.error(f"Could not send error message: {e}")
+    
+    async def add_symbol_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /addsymbol command"""
+        if not context.args or len(context.args) < 2:
+            await update.message.reply_text(
+                "Usage: `/addsymbol SEGMENT SYMBOL`\n"
+                "Example: `/addsymbol NSE_FO NIFTY24JANFUT`",
+                parse_mode='Markdown'
+            )
+            return
+        
+        segment = context.args[0]
+        symbol = context.args[1]
+        
+        # Add symbol via bot controller
+        success = self.bot_controller.symbol_manager.add_active_symbol(segment, symbol)
+        
+        if success:
+            # Update settings
+            active_symbols = self.bot_controller.symbol_manager.get_active_symbols()
+            self.bot_controller.update_settings('active_symbols', active_symbols)
+            
+            await update.message.reply_text(
+                f"✅ Added symbol: `{symbol}` from `{segment}`\n"
+                f"Total active symbols: {len(active_symbols)}",
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(
+                f"❌ Failed to add symbol: `{symbol}`\n"
+                "Make sure the segment and symbol are correct.",
+                parse_mode='Markdown'
+            )
+    
+    async def remove_symbol_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /removesymbol command"""
+        if not context.args or len(context.args) < 1:
+            await update.message.reply_text(
+                "Usage: `/removesymbol SYMBOL`\n"
+                "Example: `/removesymbol NIFTY24JANFUT`",
+                parse_mode='Markdown'
+            )
+            return
+        
+        symbol = context.args[0]
+        
+        # Remove symbol
+        success = self.bot_controller.symbol_manager.remove_active_symbol(symbol)
+        
+        if success:
+            # Update settings
+            active_symbols = self.bot_controller.symbol_manager.get_active_symbols()
+            self.bot_controller.update_settings('active_symbols', active_symbols)
+            
+            await update.message.reply_text(
+                f"✅ Removed symbol: `{symbol}`\n"
+                f"Total active symbols: {len(active_symbols)}",
+                parse_mode='Markdown'
+            )
+        else:
+            await update.message.reply_text(
+                f"❌ Symbol not found: `{symbol}`",
+                parse_mode='Markdown'
+            )
+    
+    async def list_symbols_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /listsymbols command"""
+        active_symbols = self.bot_controller.symbol_manager.get_active_symbols()
+        
+        if not active_symbols:
+            await update.message.reply_text(
+                "📍 *Active Symbols*\n\n"
+                "No symbols configured yet.\n\n"
+                "Add symbols using:\n"
+                "`/addsymbol SEGMENT SYMBOL`",
+                parse_mode='Markdown'
+            )
+            return
+        
+        message = "📍 *Active Symbols*\n\n"
+        for sym in active_symbols:
+            message += (
+                f"• `{sym['symbol']}` ({sym['segment']})\n"
+                f"  Lot Size: {sym['lot_size']}, Token: {sym['token']}\n"
+            )
+        
+        await update.message.reply_text(message, parse_mode='Markdown')
+    
+    async def set_capital_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Handle /setcapital command"""
+        if not context.args or len(context.args) < 1:
+            await update.message.reply_text(
+                "Usage: `/setcapital AMOUNT`\n"
+                "Example: `/setcapital 100000`",
+                parse_mode='Markdown'
+            )
+            return
+        
+        try:
+            capital = float(context.args[0])
+            self.bot_controller.update_settings('capital', capital)
+            
+            await update.message.reply_text(
+                f"✅ Capital set to: {format_number(capital)}",
+                parse_mode='Markdown'
+            )
+        except ValueError:
+            await update.message.reply_text(
+                "❌ Invalid amount. Please provide a number.",
+                parse_mode='Markdown'
+            )

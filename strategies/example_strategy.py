@@ -1,4 +1,4 @@
-# config/secrets.yaml
+# strategies/example_strategy.py
 """
 Example Strategy - Simple Moving Average Crossover
 This is a template for creating new strategies

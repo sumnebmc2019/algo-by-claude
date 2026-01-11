@@ -14,6 +14,7 @@ from strategies.strategy_loader import StrategyLoader
 from utils.helpers import load_settings, is_market_hours, calculate_quantity
 from utils.logger import setup_logger
 from utils.trade_logger import TradeLogger
+import yaml
 
 logger = setup_logger(__name__, "backtest")
 
@@ -40,10 +41,36 @@ class BacktestBot:
         """Get current settings"""
         return self.settings.copy()
     
+    def save_settings(self):
+        """Save settings to config file"""
+        try:
+            # Load full config
+            with open('config/settings.yaml', 'r') as f:
+                full_config = yaml.safe_load(f)
+            
+            # Update default_settings
+            full_config['default_settings'] = self.settings
+            
+            # Save back
+            with open('config/settings.yaml', 'w') as f:
+                yaml.safe_dump(full_config, f, default_flow_style=False, allow_unicode=True)
+            
+            logger.info("✅ Settings saved to config/settings.yaml")
+        except Exception as e:
+            logger.error(f"❌ Failed to save settings: {e}")
+
     def update_settings(self, key: str, value: Any):
         """Update a setting"""
         self.settings[key] = value
         logger.info(f"Updated setting: {key} = {value}")
+
+        # 🔥 CRITICAL: Recreate SymbolManager with NEW broker
+        if key == 'broker':
+            self.symbol_manager = SymbolManager(value)
+            logger.info(f"🔄 SymbolManager refreshed for broker: {value}")
+        
+        # Save settings
+        self.save_settings()
     
     def run_backtest_session(self, symbol_info: Dict[str, Any], strategy_name: str):
         """

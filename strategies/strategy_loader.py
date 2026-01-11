@@ -8,9 +8,16 @@ import importlib.util
 from pathlib import Path
 from typing import List, Dict, Optional
 from strategies.base_strategy import BaseStrategy
-from utils.logger import setup_logger
 
-logger = setup_logger(__name__)
+# Lazy logger initialization
+_logger = None
+
+def get_logger():
+    global _logger
+    if _logger is None:
+        from utils.logger import setup_logger
+        _logger = setup_logger(__name__)
+    return _logger
 
 class StrategyLoader:
     """Load and manage trading strategies dynamically"""
@@ -18,6 +25,7 @@ class StrategyLoader:
     def __init__(self):
         self.strategies: Dict[str, BaseStrategy] = {}
         self.strategies_dir = Path(__file__).parent
+        self.logger = get_logger()
     
     def load_all_strategies(self) -> int:
         """
@@ -39,9 +47,9 @@ class StrategyLoader:
                 if self.load_strategy(strategy_file.stem):
                     count += 1
             except Exception as e:
-                logger.error(f"Error loading strategy {strategy_file.stem}: {e}")
+                self.logger.error(f"Error loading strategy {strategy_file.stem}: {e}")
         
-        logger.info(f"Loaded {count} strategies")
+        self.logger.info(f"Loaded {count} strategies")
         return count
     
     def load_strategy(self, strategy_name: str) -> bool:
@@ -57,7 +65,7 @@ class StrategyLoader:
         strategy_file = self.strategies_dir / f"{strategy_name}.py"
         
         if not strategy_file.exists():
-            logger.error(f"Strategy file not found: {strategy_file}")
+            self.logger.error(f"Strategy file not found: {strategy_file}")
             return False
         
         try:
@@ -77,18 +85,18 @@ class StrategyLoader:
                     break
             
             if not strategy_class:
-                logger.error(f"No BaseStrategy subclass found in {strategy_name}")
+                self.logger.error(f"No BaseStrategy subclass found in {strategy_name}")
                 return False
             
             # Instantiate strategy
             strategy_instance = strategy_class()
             self.strategies[strategy_instance.name] = strategy_instance
             
-            logger.info(f"Loaded strategy: {strategy_instance.name}")
+            self.logger.info(f"Loaded strategy: {strategy_instance.name}")
             return True
             
         except Exception as e:
-            logger.error(f"Error loading strategy {strategy_name}: {e}")
+            self.logger.error(f"Error loading strategy {strategy_name}: {e}")
             return False
     
     def get_strategy(self, strategy_name: str) -> Optional[BaseStrategy]:
@@ -127,5 +135,5 @@ class StrategyLoader:
                 del self.strategies[strategy_name]
                 return self.load_strategy(file_name)
         
-        logger.warning(f"Strategy {strategy_name} not found for reload")
+        self.logger.warning(f"Strategy {strategy_name} not found for reload")
         return False

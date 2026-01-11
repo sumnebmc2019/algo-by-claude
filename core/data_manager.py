@@ -10,9 +10,16 @@ from datetime import datetime, timedelta
 from typing import Dict, Any, Optional, List
 import pandas as pd
 from utils.helpers import load_settings
-from utils.logger import setup_logger
 
-logger = setup_logger(__name__)
+# Lazy logger initialization
+_logger = None
+
+def get_logger():
+    global _logger
+    if _logger is None:
+        from utils.logger import setup_logger
+        _logger = setup_logger(__name__)
+    return _logger
 
 class BacktestStateManager:
     """Track backtest progress for each symbol-strategy combination"""
@@ -21,6 +28,7 @@ class BacktestStateManager:
         settings = load_settings()
         self.state_dir = settings['paths']['backtest_state']
         Path(self.state_dir).mkdir(parents=True, exist_ok=True)
+        self.logger = get_logger()
     
     def get_state_file(self, symbol: str, strategy: str) -> str:
         """Get state file path for symbol-strategy combination"""
@@ -43,7 +51,7 @@ class BacktestStateManager:
             with open(state_file, 'r') as f:
                 return json.load(f)
         except Exception as e:
-            logger.error(f"Error loading state for {symbol}-{strategy}: {e}")
+            self.logger.error(f"Error loading state for {symbol}-{strategy}: {e}")
             return None
     
     def save_state(self, symbol: str, strategy: str, state: Dict[str, Any]):
@@ -53,9 +61,9 @@ class BacktestStateManager:
         try:
             with open(state_file, 'w') as f:
                 json.dump(state, f, indent=2)
-            logger.debug(f"Saved state for {symbol}-{strategy}")
+            self.logger.debug(f"Saved state for {symbol}-{strategy}")
         except Exception as e:
-            logger.error(f"Error saving state for {symbol}-{strategy}: {e}")
+            self.logger.error(f"Error saving state for {symbol}-{strategy}: {e}")
     
     def get_next_date_range(self, symbol: str, strategy: str, 
                            duration_months: int = 4) -> tuple:
@@ -125,7 +133,7 @@ class BacktestStateManager:
         state_file = self.get_state_file(symbol, strategy)
         if os.path.exists(state_file):
             os.remove(state_file)
-            logger.info(f"Reset state for {symbol}-{strategy}")
+            self.logger.info(f"Reset state for {symbol}-{strategy}")
 
 
 class DataManager:
@@ -136,6 +144,7 @@ class DataManager:
         self.data_dir = settings['paths']['historical_data']
         Path(self.data_dir).mkdir(parents=True, exist_ok=True)
         self.backtest_state = BacktestStateManager()
+        self.logger = get_logger()
     
     def get_data_file(self, symbol: str, segment: str) -> str:
         """Get data file path for symbol"""
@@ -160,8 +169,8 @@ class DataManager:
         data_file = self.get_data_file(symbol, segment)
         
         if not os.path.exists(data_file):
-            logger.warning(f"Data file not found: {data_file}")
-            logger.info("Please download historical data")
+            self.logger.warning(f"Data file not found: {data_file}")
+            self.logger.info("Please download historical data")
             return None
         
         try:
@@ -173,11 +182,11 @@ class DataManager:
             mask = (df['timestamp'] >= start_date) & (df['timestamp'] <= end_date)
             filtered_df = df[mask].copy()
             
-            logger.info(f"Loaded {len(filtered_df)} bars for {symbol}")
+            self.logger.info(f"Loaded {len(filtered_df)} bars for {symbol}")
             return filtered_df
             
         except Exception as e:
-            logger.error(f"Error loading data for {symbol}: {e}")
+            self.logger.error(f"Error loading data for {symbol}: {e}")
             return None
     
     def save_historical_data(self, symbol: str, segment: str, 
@@ -194,6 +203,6 @@ class DataManager:
         
         try:
             data.to_csv(data_file, index=False)
-            logger.info(f"Saved data for {symbol}")
+            self.logger.info(f"Saved data for {symbol}")
         except Exception as e:
-            logger.error(f"Error saving data for {symbol}: {e}")
+            self.logger.error(f"Error saving data for {symbol}: {e}")

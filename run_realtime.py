@@ -1,4 +1,4 @@
-# config/secrets.yaml
+# run_realtime.py
 """
 Realtime Bot Launcher
 """
@@ -6,7 +6,7 @@ Realtime Bot Launcher
 import sys
 import signal
 from bots.realtime_bot import RealtimeBot
-from telegram.rt_telegram import RealtimeTelegramBot
+from tg.rt_telegram import RealtimeTelegramBot
 from utils.logger import setup_logger
 import threading
 

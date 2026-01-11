@@ -5,9 +5,16 @@ Position Manager - Track and manage open positions
 
 from typing import Dict, List, Any, Optional
 from datetime import datetime
-from utils.logger import setup_logger
 
-logger = setup_logger(__name__)
+# Lazy logger initialization
+_logger = None
+
+def get_logger():
+    global _logger
+    if _logger is None:
+        from utils.logger import setup_logger
+        _logger = setup_logger(__name__)
+    return _logger
 
 class Position:
     """Represent a single position"""
@@ -113,6 +120,7 @@ class PositionManager:
     
     def __init__(self):
         self.positions: List[Position] = []
+        self.logger = get_logger()
     
     def open_position(self, symbol: str, strategy: str, action: str,
                      quantity: int, entry_price: float,
@@ -135,7 +143,7 @@ class PositionManager:
         )
         
         self.positions.append(position)
-        logger.info(f"Opened {action} position: {symbol} @ {entry_price} x {quantity}")
+        self.logger.info(f"Opened {action} position: {symbol} @ {entry_price} x {quantity}")
         
         return position
     
@@ -148,7 +156,7 @@ class PositionManager:
             exit_price: Exit price
         """
         position.close_position(exit_price)
-        logger.info(f"Closed position: {position.symbol} @ {exit_price}, PnL: {position.pnl}")
+        self.logger.info(f"Closed position: {position.symbol} @ {exit_price}, PnL: {position.pnl}")
     
     def close_all_positions(self, exit_prices: Dict[str, float]):
         """
@@ -161,7 +169,7 @@ class PositionManager:
             if position.symbol in exit_prices:
                 self.close_position(position, exit_prices[position.symbol])
             else:
-                logger.warning(f"No exit price for {position.symbol}")
+                self.logger.warning(f"No exit price for {position.symbol}")
     
     def get_open_positions(self) -> List[Position]:
         """Get all open positions"""

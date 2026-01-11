@@ -14,6 +14,7 @@ from utils.helpers import load_settings, is_market_hours, calculate_quantity
 from utils.logger import setup_logger
 from utils.trade_logger import TradeLogger
 import pandas as pd
+import yaml
 
 logger = setup_logger(__name__, "realtime")
 
@@ -36,16 +37,45 @@ class RealtimeBot:
         # Running state
         self.is_running = False
         
+        # Telegram bot reference (set by launcher)
+        self.telegram_bot = None
+        
         logger.info("Realtime Bot initialized")
     
     def get_settings(self) -> Dict[str, Any]:
         """Get current settings"""
         return self.settings.copy()
     
+    def save_settings(self):
+        """Save settings to config file"""
+        try:
+            # Load full config
+            with open('config/settings.yaml', 'r') as f:
+                full_config = yaml.safe_load(f)
+            
+            # Update default_settings
+            full_config['default_settings'] = self.settings
+            
+            # Save back
+            with open('config/settings.yaml', 'w') as f:
+                yaml.safe_dump(full_config, f, default_flow_style=False, allow_unicode=True)
+            
+            logger.info("✅ Settings saved to config/settings.yaml")
+        except Exception as e:
+            logger.error(f"❌ Failed to save settings: {e}")
+    
     def update_settings(self, key: str, value: Any):
         """Update a setting"""
         self.settings[key] = value
         logger.info(f"Updated setting: {key} = {value}")
+        
+        # 🔥 CRITICAL: Recreate SymbolManager with NEW broker
+        if key == 'broker':
+            self.symbol_manager = SymbolManager(value)
+            logger.info(f"🔄 SymbolManager refreshed for broker: {value}")
+        
+        # Save settings
+        self.save_settings()
     
     def get_ltp(self, symbol: str) -> float:
         """
@@ -63,30 +93,79 @@ class RealtimeBot:
     
     def update_ltp_all_symbols(self):
         """Update LTP for all active symbols"""
-        active_symbols = self.symbol_manager.get_active_symbols()
-        
-        for symbol_info in active_symbols:
-            # TODO: Implement broker API call
-            # For now, using placeholder
-            ltp = 100.0  # Replace with actual API call
-            self.ltp_cache[symbol_info['symbol']] = ltp
-        
-        logger.info(f"Updated LTP for {len(active_symbols)} symbols")
+        try:
+            from core.broker_manager import BrokerManager
+            
+            active_symbols = self.symbol_manager.get_active_symbols()
+            
+            if not active_symbols:
+                return
+            
+            # Get broker manager
+            broker_mgr = BrokerManager()
+            if not broker_mgr.set_active_broker(self.settings['broker']):
+                logger.error("Failed to set active broker")
+                return
+            
+            broker = broker_mgr.get_active_broker()
+            
+            for symbol_info in active_symbols:
+                try:
+                    ltp = broker.get_ltp(
+                        symbol=symbol_info['symbol'],
+                        exchange=symbol_info.get('exchange', 'NSE')
+                    )
+                    
+                    if ltp is not None:
+                        self.ltp_cache[symbol_info['symbol']] = ltp
+                except Exception as e:
+                    logger.error(f"Error fetching LTP for {symbol_info['symbol']}: {e}")
+            
+            logger.info(f"Updated LTP for {len(active_symbols)} symbols")
+            
+        except Exception as e:
+            logger.error(f"Error in update_ltp_all_symbols: {e}")
     
-    def fetch_live_data(self, symbol: str, timeframe: str = "1min") -> pd.DataFrame:
+    def fetch_live_data(self, symbol_info: Dict[str, Any], timeframe: str = "1min") -> pd.DataFrame:
         """
         Fetch live market data for symbol
         
         Args:
-            symbol: Symbol name
+            symbol_info: Symbol information dictionary
             timeframe: Timeframe (1min, 5min, etc.)
         
         Returns:
             DataFrame with OHLCV data
         """
-        # TODO: Implement broker API call to fetch candles
-        # This is a placeholder
-        return pd.DataFrame()
+        try:
+            from core.broker_manager import BrokerManager
+            from datetime import datetime, timedelta
+            
+            # Get broker manager
+            broker_mgr = BrokerManager()
+            if not broker_mgr.set_active_broker(self.settings['broker']):
+                logger.error("Failed to set active broker")
+                return pd.DataFrame()
+            
+            broker = broker_mgr.get_active_broker()
+            
+            # Get data for last 100 candles
+            to_date = datetime.now().strftime('%Y-%m-%d')
+            from_date = (datetime.now() - timedelta(days=5)).strftime('%Y-%m-%d')
+            
+            data = broker.get_historical_data(
+                symbol=symbol_info['symbol'],
+                exchange=symbol_info.get('exchange', 'NSE'),
+                from_date=from_date,
+                to_date=to_date,
+                interval=timeframe
+            )
+            
+            return data if data is not None else pd.DataFrame()
+            
+        except Exception as e:
+            logger.error(f"Error fetching live data: {e}")
+            return pd.DataFrame()
     
     def execute_trade(self, signal: Dict[str, Any], symbol_info: Dict[str, Any]):
         """
@@ -141,12 +220,28 @@ class RealtimeBot:
                 target=signal.get('target')
             )
             
+            # Send telegram notification for paper trade
+            if self.telegram_bot:
+                try:
+                    import asyncio
+                    asyncio.create_task(self.telegram_bot.send_trade_notification(trade_data))
+                except Exception as e:
+                    logger.error(f"Failed to send telegram notification: {e}")
+            
         else:
             # Live trading - execute via broker API
             logger.info(f"Live Trade: {signal['action']} {symbol_info['symbol']} @ {signal['price']}")
             # TODO: Implement broker API order placement
             # order_id = broker_api.place_order(...)
             # trade_data['order_id'] = order_id
+            
+            # Send telegram notification for live trade
+            if self.telegram_bot:
+                try:
+                    import asyncio
+                    asyncio.create_task(self.telegram_bot.send_trade_notification(trade_data))
+                except Exception as e:
+                    logger.error(f"Failed to send telegram notification: {e}")
         
         # Log trade
         self.trade_logger.log_trade(trade_data)
@@ -202,7 +297,7 @@ class RealtimeBot:
     def scan_and_trade(self):
         """Main scanning and trading logic"""
         if not is_market_hours("realtime"):
-            logger.info("Outside market hours")
+            logger.debug("Outside market hours")
             return
         
         logger.info("Scanning for trading opportunities...")
@@ -213,11 +308,20 @@ class RealtimeBot:
             for name in self.settings['active_strategies']
         ]
         
+        if not active_symbols:
+            logger.debug("No active symbols")
+            return
+        
+        if not active_strategies:
+            logger.debug("No active strategies")
+            return
+        
         for symbol_info in active_symbols:
             # Fetch live data
-            data = self.fetch_live_data(symbol_info['symbol'])
+            data = self.fetch_live_data(symbol_info)
             
             if data.empty:
+                logger.debug(f"No data for {symbol_info['symbol']}")
                 continue
             
             # Run each strategy
@@ -225,12 +329,15 @@ class RealtimeBot:
                 if not strategy:
                     continue
                 
-                signal = strategy.generate_signals(data, symbol_info)
-                
-                if signal:
-                    signal['strategy'] = strategy.name
-                    logger.info(f"Signal: {signal['action']} {symbol_info['symbol']} - {signal['reason']}")
-                    self.execute_trade(signal, symbol_info)
+                try:
+                    signal = strategy.generate_signals(data, symbol_info)
+                    
+                    if signal:
+                        signal['strategy'] = strategy.name
+                        logger.info(f"Signal: {signal['action']} {symbol_info['symbol']} - {signal['reason']}")
+                        self.execute_trade(signal, symbol_info)
+                except Exception as e:
+                    logger.error(f"Error running strategy {strategy.name}: {e}")
     
     def run_cycle(self):
         """Run one complete cycle"""

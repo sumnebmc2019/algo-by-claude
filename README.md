@@ -68,6 +68,8 @@ pytz==2023.3
 requests==2.31.0
 python-dotenv==1.0.0
 schedule==1.2.0
+smartapi-python==1.3.0
+pyotp==2.9.0
 ```
 
 Install:
@@ -99,6 +101,13 @@ brokers:
   zerodha:
     api_key: "YOUR_ZERODHA_API_KEY"
     api_secret: "YOUR_ZERODHA_API_SECRET"
+    enabled: false
+  
+  angelone:
+    api_key: "YOUR_ANGELONE_API_KEY"
+    client_id: "YOUR_ANGELONE_CLIENT_ID"
+    password: "YOUR_ANGELONE_PASSWORD"
+    totp_secret: "YOUR_ANGELONE_TOTP_SECRET"
     enabled: true
 ```
 
@@ -185,6 +194,33 @@ python run_realtime.py
    - Close all positions (realtime only)
 
 ## 📊 Creating New Strategies
+
+The system comes with two strategies:
+1. **SMA Crossover** (example_strategy.py) - Simple moving average crossover
+2. **5 EMA Power of Stocks** (ema5_power_of_stocks.py) - High-probability intraday strategy
+
+### Using the 5 EMA Strategy
+
+The 5 EMA strategy from Power of Stocks is ready to use:
+
+**Strategy Details**:
+- **Timeframe**: 5-minute or 15-minute charts
+- **Entry**: Price crosses above/below 5 EMA
+- **Stop Loss**: Recent swing low/high
+- **Target**: 1.5x risk-reward ratio
+- **Trend Filter**: 50 EMA for higher timeframe confirmation
+
+**Enable via Telegram**:
+1. Settings → Strategies
+2. Select "5EMA_PowerOfStocks"
+3. Activate
+
+**Best For**:
+- NIFTY, BANKNIFTY futures
+- Trending markets
+- Intraday trading only
+
+### Creating Custom Strategies
 
 1. Copy `strategies/example_strategy.py`
 2. Rename it (e.g., `my_strategy.py`)

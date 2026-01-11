@@ -1,65 +1,62 @@
-# ALGO BY GUGAN - Algorithmic Trading System
+# Complete Deployment Guide - ALGO BY GUGAN
 
-A professional, scalable algorithmic trading system built with Python for backtesting and live trading with multiple brokers.
+## Step-by-Step Deployment on Azure Ubuntu VM
 
-## 🌟 Features
-
-- **Dual Bot Architecture**: Separate bots for backtesting and realtime trading
-- **Paper & Live Trading**: Safe paper trading mode before going live
-- **Multi-Broker Support**: Easily integrate multiple brokers via APIs
-- **Multi-Segment Trading**: Support for NSE_EQ, NSE_FO, BSE_EQ, MCX_FO, CDS_FO
-- **Plug-and-Play Strategies**: Add new strategies without modifying core code
-- **Telegram Control Panel**: Full control and monitoring via Telegram
-- **Automated Backtesting**: Progressive historical data testing with state tracking
-- **Risk Management**: Built-in position sizing and risk controls
-- **Comprehensive Logging**: Date-wise logs with auto-cleanup
-- **Trade Tracking**: CSV-based trade logs for Excel/Sheets analysis
-
-## 📋 Prerequisites
-
-- Ubuntu (Azure VM or local)
-- Python 3.8+
-- tmux
-- Telegram account and bot tokens
-
-## 🚀 Quick Setup
-
-### 1. Initial Setup
+### Phase 1: VM Setup (5 minutes)
 
 ```bash
-# SSH into your Azure VM
-ssh username@your-vm-ip
+# 1. SSH into your Azure VM
+ssh your-username@your-vm-ip
 
-# Update system
+# 2. Update system packages
 sudo apt update && sudo apt upgrade -y
 
-# Install Python and dependencies
-sudo apt install python3 python3-pip python3-venv tmux -y
+# 3. Install required system packages
+sudo apt install -y python3 python3-pip python3-venv tmux git nano
+```
 
-# Create virtual environment
+### Phase 2: Project Setup (10 minutes)
+
+```bash
+# 1. Create virtual environment in home directory
 cd ~
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Clone or create project directory
+# 2. Create project directory
 mkdir -p algo_by_gugan
 cd algo_by_gugan
+
+# 3. Create directory structure
+mkdir -p config
+mkdir -p core
+mkdir -p strategies
+mkdir -p bots
+mkdir -p telegram
+mkdir -p utils
+mkdir -p data/master_lists
+mkdir -p data/historical
+mkdir -p data/backtest_state
+mkdir -p logs/backtest
+mkdir -p logs/realtime
+mkdir -p trades
+
+# 4. Create __init__.py files
+touch core/__init__.py
+touch strategies/__init__.py
+touch bots/__init__.py
+touch telegram/__init__.py
+touch utils/__init__.py
+
+# 5. Verify structure
+tree -L 2  # or: ls -R
 ```
 
-### 2. Project Structure Setup
+### Phase 3: Install Dependencies (5 minutes)
 
 ```bash
-# Create directory structure
-mkdir -p config core strategies bots telegram utils data/{master_lists,historical,backtest_state} logs/{backtest,realtime} trades
-
-# Create __init__.py files
-touch core/__init__.py strategies/__init__.py bots/__init__.py telegram/__init__.py utils/__init__.py
-```
-
-### 3. Install Dependencies
-
-Create `requirements.txt`:
-```
+# 1. Create requirements.txt
+cat > requirements.txt << 'EOF'
 python-telegram-bot==20.7
 pyyaml==6.0.1
 pandas==2.1.4
@@ -68,165 +65,84 @@ pytz==2023.3
 requests==2.31.0
 python-dotenv==1.0.0
 schedule==1.2.0
-```
+smartapi-python==1.3.0
+pyotp==2.9.0
+EOF
 
-Install:
-```bash
+# 2. Install dependencies
 pip install -r requirements.txt
+
+# 3. Verify installation
+pip list | grep -E "telegram|smartapi|pyotp|pandas|yaml"
 ```
 
-### 4. Configuration
+### Phase 4: Telegram Bot Setup (10 minutes)
 
-#### Create Telegram Bots
-1. Message [@BotFather](https://t.me/botfather) on Telegram
-2. Create two bots:
-   - `/newbot` for Backtest Bot
-   - `/newbot` for Realtime Bot
-3. Save the bot tokens
-4. Get your chat ID from [@userinfobot](https://t.me/userinfobot)
+```bash
+# 1. Open Telegram and message @BotFather
+# 2. Create two bots:
 
-#### Configure secrets.yaml
+# For Backtest Bot:
+/newbot
+# Name: ALGO Backtest
+# Username: your_algo_backtest_bot
+# Save the TOKEN
+
+# For Realtime Bot:
+/newbot
+# Name: ALGO Realtime
+# Username: your_algo_realtime_bot
+# Save the TOKEN
+
+# 3. Get your Chat ID
+# Message @userinfobot on Telegram
+# Save your CHAT_ID
+```
+
+### Phase 5: Configuration Files (15 minutes)
+
+```bash
+# 1. Create secrets.yaml
+nano config/secrets.yaml
+```
+
+Paste and modify:
 ```yaml
 telegram:
   backtest:
-    bot_token: "YOUR_BACKTEST_BOT_TOKEN"
-    chat_id: "YOUR_CHAT_ID"
+    bot_token: "123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+    chat_id: "987654321"
   realtime:
-    bot_token: "YOUR_REALTIME_BOT_TOKEN"
-    chat_id: "YOUR_CHAT_ID"
+    bot_token: "987654321:XYZabcDEFghiJKLmnoPQRstuVW"
+    chat_id: "987654321"
 
 brokers:
   zerodha:
-    api_key: "YOUR_ZERODHA_API_KEY"
-    api_secret: "YOUR_ZERODHA_API_SECRET"
+    api_key: "your_zerodha_api_key"
+    api_secret: "your_zerodha_api_secret"
+    enabled: false
+  
+  angelone:
+    api_key: "SmGlKZoq"
+    client_id: "A123456"
+    password: "1234"
+    totp_secret: "ABCDEFGHIJKLMNOP"
     enabled: true
 ```
 
-### 5. Prepare Master Lists
-
-Download master symbol lists from your broker and save as JSON in `data/master_lists/`:
-
-Example format:
-```json
-[
-  {
-    "symbol": "NIFTY24JANFUT",
-    "token": "12345",
-    "lot_size": 50,
-    "tick_size": 0.05,
-    "exchange": "NSE"
-  }
-]
-```
-
-Save as: `data/master_lists/zerodha_NSE_FO.json`
-
-### 6. Prepare Historical Data
-
-For backtesting, download historical data and save as CSV in `data/historical/`:
-
-Format:
-```csv
-timestamp,open,high,low,close,volume
-2024-01-01 09:15:00,21500,21550,21480,21530,1000000
-```
-
-Save as: `data/historical/NSE_FO_NIFTY24JANFUT.csv`
-
-## 🎮 Running the Bots
-
-### Using tmux (Recommended)
-
-```bash
-# Start Backtest Bot
-tmux new-session -d -s algo_backtest 'cd ~/algo_by_gugan && source ~/.venv/bin/activate && python run_backtest.py'
-
-# Start Realtime Bot
-tmux new-session -d -s algo_realtime 'cd ~/algo_by_gugan && source ~/.venv/bin/activate && python run_realtime.py'
-
-# View running sessions
-tmux ls
-
-# Attach to backtest session
-tmux attach -t algo_backtest
-
-# Attach to realtime session  
-tmux attach -t algo_realtime
-
-# Detach from session: Ctrl+B then D
-
-# Kill sessions
-tmux kill-session -t algo_backtest
-tmux kill-session -t algo_realtime
-```
-
-### Direct Execution
-
-```bash
-# Backtest Bot
-source ~/.venv/bin/activate
-python run_backtest.py
-
-# Realtime Bot (in another terminal)
-source ~/.venv/bin/activate
-python run_realtime.py
-```
-
-## 📱 Using Telegram Interface
-
-1. Start a chat with your bot
-2. Send `/start` command
-3. Use the interactive menu to:
-   - Configure settings
-   - Select symbols and strategies
-   - Switch between paper/live mode
-   - Monitor positions and PnL
-   - View statistics
-   - Close all positions (realtime only)
-
-## 📊 Creating New Strategies
-
-1. Copy `strategies/example_strategy.py`
-2. Rename it (e.g., `my_strategy.py`)
-3. Modify the class name and implement your logic:
-
+**For AngelOne TOTP Setup:**
 ```python
-from strategies.base_strategy import BaseStrategy
-import pandas as pd
-from typing import Dict, Any, Optional
-
-class MyStrategy(BaseStrategy):
-    def __init__(self):
-        super().__init__(name="My_Strategy")
-        self.parameters = {
-            'period': 14,
-            'threshold': 70
-        }
-    
-    def generate_signals(self, data: pd.DataFrame, 
-                        symbol_info: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        # Your strategy logic here
-        if condition_met:
-            return {
-                'action': 'BUY',
-                'order_type': 'MARKET',
-                'price': current_price,
-                'stop_loss': sl_price,
-                'target': target_price,
-                'reason': 'Signal reason'
-            }
-        return None
-    
-    def get_parameters(self) -> Dict[str, Any]:
-        return self.parameters
+# Run this once to generate TOTP secret
+python3 -c "import pyotp; print('TOTP Secret:', pyotp.random_base32())"
+# Use the generated secret in secrets.yaml
 ```
 
-4. Save the file - bot will auto-load it on next run!
+```bash
+# 2. Create settings.yaml
+nano config/settings.yaml
+```
 
-## 🔧 Configuration Options
-
-### settings.yaml
-
+Paste:
 ```yaml
 timezone: "Asia/Kolkata"
 
@@ -244,82 +160,207 @@ backtest_bot:
     all_days: true
   session_duration_months: 4
   start_date: "2010-01-01"
+
+logging:
+  retention_days: 15
+  level: "DEBUG"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+paths:
+  master_lists: "data/master_lists"
+  historical_data: "data/historical"
+  backtest_state: "data/backtest_state"
+  logs_backtest: "logs/backtest"
+  logs_realtime: "logs/realtime"
+  trades_backtest: "trades/backtest_trades.csv"
+  trades_realtime: "trades/realtime_trades.csv"
+
+segments:
+  - "NSE_EQ"
+  - "NSE_FO"
+  - "BSE_EQ"
+  - "MCX_FO"
+  - "CDS_FO"
+
+default_settings:
+  broker: "angelone"
+  segment: "NSE_FO"
+  capital: 100000
+  risk_per_trade: 2.0
+  max_trades: 5
+  mode: "paper"
+  active_strategies: ["5EMA_PowerOfStocks"]
+  active_symbols: []
 ```
 
-## 📁 Project Structure
+### Phase 6: Setup AngelOne Connection (10 minutes)
 
-```
-algo_by_gugan/
-├── config/          # Configuration files
-├── core/            # Core trading logic
-├── strategies/      # Trading strategies
-├── bots/            # Bot implementations
-├── telegram/        # Telegram interfaces
-├── utils/           # Utilities
-├── data/            # Data storage
-├── logs/            # Debug logs (auto-cleanup after 15 days)
-└── trades/          # Trade CSV logs
-```
-
-## 📈 Trade Logs
-
-Trade logs are saved as CSV files:
-- `trades/backtest_trades.csv`
-- `trades/realtime_trades.csv`
-
-Import these directly into Excel/Google Sheets for analysis.
-
-## 🔍 Monitoring
-
-### View Logs
 ```bash
-# Backtest logs
-tail -f logs/backtest/$(date +%Y-%m-%d).log
+# 1. Copy the setup script (setup_angelone.py)
+nano setup_angelone.py
+# Paste the setup_angelone.py content
 
-# Realtime logs
-tail -f logs/realtime/$(date +%Y-%m-%d).log
+# 2. Run the setup script to test connection and download master contracts
+python setup_angelone.py
+
+# 3. Verify master contracts are downloaded
+ls -lh data/master_lists/
+
+# You should see:
+# angelone_NSE_EQ.json
+# angelone_NSE_FO.json
+# angelone_BSE_EQ.json
+# angelone_MCX_FO.json
+# angelone_CDS_FO.json
 ```
 
-### Check Bot Status
-```bash
-# Check if bots are running
-ps aux | grep python | grep run_
+### Phase 7: Copy All Python Files (20 minutes)
 
-# Check tmux sessions
+Copy all the provided Python files into their respective directories:
+
+```
+utils/logger.py
+utils/trade_logger.py
+utils/helpers.py
+core/symbol_manager.py
+core/position_manager.py
+core/data_manager.py
+core/broker_manager.py
+strategies/base_strategy.py
+strategies/strategy_loader.py
+strategies/example_strategy.py
+strategies/ema5_power_of_stocks.py  ← NEW: 5 EMA Strategy
+bots/backtest_bot.py
+bots/realtime_bot.py
+telegram/bt_telegram.py
+telegram/rt_telegram.py
+run_backtest.py
+run_realtime.py
+setup_angelone.py  ← NEW: AngelOne setup script
+```
+
+**Quick method using nano:**
+```bash
+# For each file:
+nano utils/logger.py
+# Paste content, Ctrl+X, Y, Enter
+
+# Or use SCP from your local machine:
+scp -r local_algo_project/* username@vm-ip:~/algo_by_gugan/
+```
+
+### Phase 7: Prepare Master Lists (Variable time)
+
+```bash
+# 1. Download master symbol list from your broker
+# 2. Convert to JSON format if needed
+
+# Example structure:
+nano data/master_lists/zerodha_NSE_FO.json
+```
+
+```json
+[
+  {
+    "symbol": "NIFTY24JANFUT",
+    "token": "256265",
+    "lot_size": 50,
+    "tick_size": 0.05,
+    "exchange": "NFO"
+  },
+  {
+    "symbol": "BANKNIFTY24JANFUT",
+    "token": "260105",
+    "lot_size": 25,
+    "tick_size": 0.05,
+    "exchange": "NFO"
+  }
+]
+```
+
+### Phase 8: Historical Data Preparation (Variable time)
+
+```bash
+# 1. Download historical data from broker or data provider
+# 2. Format as CSV
+
+# Example:
+nano data/historical/NSE_FO_NIFTY24JANFUT.csv
+```
+
+```csv
+timestamp,open,high,low,close,volume
+2024-01-01 09:15:00,21500.00,21550.00,21480.00,21530.00,1000000
+2024-01-01 09:16:00,21530.00,21560.00,21520.00,21545.00,950000
+```
+
+### Phase 9: Test Run (10 minutes)
+
+```bash
+# 1. Activate virtual environment
+source ~/.venv/bin/activate
+cd ~/algo_by_gugan
+
+# 2. Test backtest bot
+python run_backtest.py
+# Press Ctrl+C after verifying it starts
+
+# 3. Test realtime bot
+python run_realtime.py
+# Press Ctrl+C after verifying it starts
+
+# 4. Check for errors in logs
+cat logs/backtest/$(date +%Y-%m-%d).log
+cat logs/realtime/$(date +%Y-%m-%d).log
+```
+
+### Phase 10: Production Deployment with tmux (5 minutes)
+
+```bash
+# 1. Start backtest bot in tmux
+tmux new-session -d -s algo_backtest 'cd ~/algo_by_gugan && source ~/.venv/bin/activate && python run_backtest.py'
+
+# 2. Start realtime bot in tmux
+tmux new-session -d -s algo_realtime 'cd ~/algo_by_gugan && source ~/.venv/bin/activate && python run_realtime.py'
+
+# 3. Verify sessions are running
 tmux ls
+
+# 4. Test Telegram bots
+# Open Telegram and message both bots with /start
 ```
 
-## 🛡️ Safety Features
-
-1. **Paper Trading Mode**: Test strategies without real money
-2. **Risk Management**: Automated position sizing based on capital and risk
-3. **Max Trades Limit**: Prevent overtrading
-4. **Stop Loss & Targets**: Built-in risk controls
-5. **Telegram Alerts**: Real-time notifications for all trades
-
-## 🔄 Backtest Carryover System
-
-The backtest bot automatically:
-1. Tracks progress for each symbol-strategy combination
-2. Processes 4 months of data per day
-3. Resumes from where it left off
-4. Stores state in `data/backtest_state/`
-5. Prevents duplicate processing
-
-## 🎯 Broker Integration
-
-To add a new broker:
-
-1. Add credentials to `config/secrets.yaml`
-2. Implement broker API calls in `core/broker_manager.py`
-3. Download and save master lists
-
-## ⚙️ Systemd Service (Optional)
-
-For auto-start on VM boot:
+### Phase 11: Monitoring Setup (5 minutes)
 
 ```bash
-# Create service file
+# 1. Create monitoring script
+cat > ~/check_bots.sh << 'EOF'
+#!/bin/bash
+echo "=== ALGO BOT STATUS ==="
+echo ""
+echo "Tmux Sessions:"
+tmux ls
+echo ""
+echo "Python Processes:"
+ps aux | grep python | grep run_
+echo ""
+echo "Recent Backtest Logs:"
+tail -5 ~/algo_by_gugan/logs/backtest/$(date +%Y-%m-%d).log
+echo ""
+echo "Recent Realtime Logs:"
+tail -5 ~/algo_by_gugan/logs/realtime/$(date +%Y-%m-%d).log
+EOF
+
+chmod +x ~/check_bots.sh
+
+# 2. Run monitoring
+~/check_bots.sh
+```
+
+### Phase 12: Auto-Start on Boot (Optional)
+
+```bash
+# 1. Create systemd service for Realtime Bot
 sudo nano /etc/systemd/system/algo-realtime.service
 ```
 
@@ -334,36 +375,223 @@ User=your-username
 WorkingDirectory=/home/your-username/algo_by_gugan
 ExecStart=/home/your-username/.venv/bin/python run_realtime.py
 Restart=always
+RestartSec=10
 
 [Install]
 WantedBy=multi-user.target
 ```
 
-Enable:
 ```bash
+# 2. Create systemd service for Backtest Bot
+sudo nano /etc/systemd/system/algo-backtest.service
+```
+
+```ini
+[Unit]
+Description=ALGO BY GUGAN Backtest Bot
+After=network.target
+
+[Service]
+Type=simple
+User=your-username
+WorkingDirectory=/home/your-username/algo_by_gugan
+ExecStart=/home/your-username/.venv/bin/python run_backtest.py
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+# 3. Enable and start services
+sudo systemctl daemon-reload
 sudo systemctl enable algo-realtime
+sudo systemctl enable algo-backtest
+sudo systemctl start algo-realtime
+sudo systemctl start algo-backtest
+
+# 4. Check status
+sudo systemctl status algo-realtime
+sudo systemctl status algo-backtest
+```
+
+## Daily Operations
+
+### Starting Bots
+```bash
+# Using tmux
+tmux new-session -d -s algo_backtest 'cd ~/algo_by_gugan && source ~/.venv/bin/activate && python run_backtest.py'
+tmux new-session -d -s algo_realtime 'cd ~/algo_by_gugan && source ~/.venv/bin/activate && python run_realtime.py'
+
+# Using systemd
+sudo systemctl start algo-backtest
 sudo systemctl start algo-realtime
 ```
 
-## 📞 Support
+### Stopping Bots
+```bash
+# Using tmux
+tmux kill-session -t algo_backtest
+tmux kill-session -t algo_realtime
 
-For issues or questions:
-1. Check logs in `logs/` directory
-2. Review configuration in `config/`
-3. Ensure all dependencies are installed
-4. Verify broker API credentials
+# Using systemd
+sudo systemctl stop algo-backtest
+sudo systemctl stop algo-realtime
+```
 
-## ⚠️ Disclaimer
+### Viewing Logs
+```bash
+# Today's logs
+tail -f logs/backtest/$(date +%Y-%m-%d).log
+tail -f logs/realtime/$(date +%Y-%m-%d).log
 
-This is trading software. Always:
-- Test thoroughly in paper trading mode
-- Understand your strategies
-- Start with small capital
-- Monitor actively
-- Use proper risk management
+# Specific date
+tail -f logs/backtest/2024-01-15.log
 
-Trading involves risk. Use at your own discretion.
+# Last 100 lines
+tail -100 logs/realtime/$(date +%Y-%m-%d).log
+```
+
+### Viewing Trade Logs
+```bash
+# Open in terminal
+cat trades/realtime_trades.csv | column -t -s','
+
+# Download to local machine
+scp username@vm-ip:~/algo_by_gugan/trades/*.csv ./
+```
+
+### Attaching to Running Bots
+```bash
+# Attach to backtest bot
+tmux attach -t algo_backtest
+# Detach: Ctrl+B then D
+
+# Attach to realtime bot
+tmux attach -t algo_realtime
+# Detach: Ctrl+B then D
+```
+
+## Troubleshooting
+
+### Bot Not Starting
+```bash
+# Check Python errors
+python run_realtime.py
+
+# Check dependencies
+pip list | grep -E "telegram|pandas|yaml"
+
+# Check configuration
+cat config/secrets.yaml
+cat config/settings.yaml
+```
+
+### Telegram Not Working
+```bash
+# Test bot token
+curl "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getMe"
+
+# Check logs
+grep -i telegram logs/realtime/$(date +%Y-%m-%d).log
+```
+
+### Data Issues
+```bash
+# Check master lists
+ls -lh data/master_lists/
+
+# Check historical data
+ls -lh data/historical/
+
+# Verify CSV format
+head -5 data/historical/NSE_FO_NIFTY24JANFUT.csv
+```
+
+### Performance Issues
+```bash
+# Check memory usage
+free -h
+
+# Check disk space
+df -h
+
+# Check CPU usage
+top
+
+# Check bot processes
+ps aux | grep python
+```
+
+## Maintenance Tasks
+
+### Weekly
+- Review trade logs
+- Check bot performance
+- Verify log file sizes
+- Update strategies if needed
+
+### Monthly
+- Backup trade logs
+- Review and optimize strategies
+- Update broker credentials if needed
+- Check for Python package updates
+
+### Quarterly
+- Full system backup
+- Performance analysis
+- Strategy backtesting review
+- Infrastructure assessment
+
+## Security Best Practices
+
+1. **Never commit secrets.yaml to git**
+2. **Use strong passwords for VM access**
+3. **Enable firewall on Azure**
+4. **Regularly update system packages**
+5. **Monitor unauthorized access attempts**
+6. **Use SSH keys instead of passwords**
+7. **Keep broker API keys secure**
+8. **Regularly rotate credentials**
+
+## Emergency Procedures
+
+### Close All Positions Immediately
+```bash
+# Via Telegram: Use "Close All" button
+
+# Via CLI:
+python -c "
+from bots.realtime_bot import RealtimeBot
+bot = RealtimeBot()
+bot.close_all_positions()
+"
+```
+
+### Stop All Trading
+```bash
+# Kill all bots immediately
+tmux kill-server
+
+# Or
+sudo systemctl stop algo-backtest
+sudo systemctl stop algo-realtime
+```
+
+## Support Checklist
+
+When seeking help, provide:
+- [ ] Error logs from today
+- [ ] Configuration files (without secrets)
+- [ ] Bot version and Python version
+- [ ] Steps to reproduce the issue
+- [ ] Expected vs actual behavior
 
 ---
 
-Built with ❤️ for algorithmic traders
+**Deployment Complete!** 🎉
+
+Your algo trading system is now live. Monitor via Telegram and logs. Start with paper trading before going live.
+
+Good luck with your trading! 📈

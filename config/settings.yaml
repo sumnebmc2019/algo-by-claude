@@ -1,50 +1,63 @@
-# config/settings.yaml
-# Bot settings and configurations
-
-timezone: "Asia/Kolkata"
-
-realtime_bot:
-  schedule:
-    start_time: "08:55"
-    end_time: "16:05"
-    weekdays_only: true
-  ltp_update_interval: 600  # seconds (10 minutes)
-
 backtest_bot:
   schedule:
-    start_time: "06:00"
-    end_time: "12:00"
     all_days: true
+    end_time: '12:00'
+    start_time: 06:00
   session_duration_months: 4
-  start_date: "2010-01-01"  # Global backtest start date
-
-logging:
-  retention_days: 15
-  level: "DEBUG"
-  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
-
-paths:
-  master_lists: "data/master_lists"
-  historical_data: "data/historical"
-  backtest_state: "data/backtest_state"
-  logs_backtest: "logs/backtest"
-  logs_realtime: "logs/realtime"
-  trades_backtest: "trades/backtest_trades.csv"
-  trades_realtime: "trades/realtime_trades.csv"
-
-segments:
-  - "NSE_EQ"      # NSE Equity
-  - "NSE_FO"      # NSE Futures & Options
-  - "BSE_EQ"      # BSE Equity
-  - "MCX_FO"      # MCX Commodities
-  - "CDS_FO"      # Currency Derivatives
-
+  start_date: '2010-01-01'
 default_settings:
-  broker: "zerodha"
-  segment: "NSE_FO"
+  active_strategies:
+  - 5EMA_PowerOfStocks
+  active_symbols:
+  - broker: angelone
+    exchange: NFO
+    lot_size: 65
+    segment: NSE_FO
+    symbol: NIFTY27JAN26FUT
+    tick_size: 10.0
+    token: '49229'
+  - broker: angelone
+    exchange: NSE
+    lot_size: 1
+    segment: NSE_EQ
+    symbol: NIFTY
+    tick_size: 0.0
+    token: '26000'
+  - broker: angelone
+    exchange: NSE
+    lot_size: 1
+    segment: NSE_EQ
+    symbol: BANKNIFTY
+    tick_size: 0.0
+    token: '26009'
+  broker: angelone
   capital: 100000
-  risk_per_trade: 2.0  # percentage
-  max_trades: 5
-  mode: "paper"  # paper or live
-  active_strategies: []
-  active_symbols: []
+  max_trades: 10
+  mode: paper
+  risk_per_trade: 2.0
+  segment: NSE_FO
+logging:
+  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+  level: DEBUG
+  retention_days: 15
+paths:
+  backtest_state: data/backtest_state
+  historical_data: data/historical
+  logs_backtest: logs/backtest
+  logs_realtime: logs/realtime
+  master_lists: data/master_lists
+  trades_backtest: trades/backtest_trades.csv
+  trades_realtime: trades/realtime_trades.csv
+realtime_bot:
+  ltp_update_interval: 600
+  schedule:
+    end_time: '16:05'
+    start_time: 08:55
+    weekdays_only: true
+segments:
+- NSE_EQ
+- NSE_FO
+- BSE_EQ
+- MCX_FO
+- CDS_FO
+timezone: Asia/Kolkata

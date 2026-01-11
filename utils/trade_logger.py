@@ -1,4 +1,4 @@
-# config/secrets.yaml
+# utils/trade_logger.py
 """
 CSV Trade Logger for recording all trades
 """

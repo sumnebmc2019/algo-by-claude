@@ -32,6 +32,11 @@ class BacktestBot:
         # Load strategies
         self.strategy_loader.load_all_strategies()
         
+        # Load active symbols from settings
+        if self.settings.get('active_symbols'):
+            self.symbol_manager.active_symbols = self.settings['active_symbols']
+            logger.info(f"Loaded {len(self.settings['active_symbols'])} active symbols from settings")
+        
         # Running state
         self.is_running = False
         

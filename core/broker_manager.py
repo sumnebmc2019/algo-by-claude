@@ -1,4 +1,4 @@
-# core/broker_manager.py
+# config/secrets.yaml
 """
 Broker Manager - Unified interface for multiple brokers
 """
@@ -499,11 +499,37 @@ class AngelOneSmartAPIBroker(BaseBroker):
             return []
     
     def _get_token(self, symbol: str, exchange: str) -> Optional[str]:
-        """Get instrument token for symbol"""
-        # This should be implemented to fetch from master list
-        # For now, return None to indicate token lookup needed
-        logger.warning(f"Token lookup not implemented for {symbol}")
-        return None
+        """Get instrument token for symbol from master list"""
+        try:
+            # Load symbol manager to get token from master list
+            from core.symbol_manager import SymbolManager
+            
+            # Map exchange to segment
+            segment_map = {
+                'NSE': 'NSE_EQ',
+                'NFO': 'NSE_FO',
+                'BSE': 'BSE_EQ',
+                'MCX': 'MCX_FO',
+                'CDS': 'CDS_FO'
+            }
+            
+            segment = segment_map.get(exchange, 'NSE_FO')
+            
+            # Create symbol manager instance
+            sym_mgr = SymbolManager('angelone')
+            
+            # Get symbol details
+            details = sym_mgr.get_symbol_details(segment, symbol, broker='angelone')
+            
+            if details and details.get('token'):
+                return str(details['token'])
+            
+            self.logger.warning(f"Token not found for {symbol} in {segment}")
+            return None
+            
+        except Exception as e:
+            self.logger.error(f"Error getting token for {symbol}: {e}")
+            return None
 
 
 # Example usage:

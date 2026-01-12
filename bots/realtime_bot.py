@@ -31,6 +31,11 @@ class RealtimeBot:
         # Load strategies
         self.strategy_loader.load_all_strategies()
         
+        # Load active symbols from settings
+        if self.settings.get('active_symbols'):
+            self.symbol_manager.active_symbols = self.settings['active_symbols']
+            logger.info(f"Loaded {len(self.settings['active_symbols'])} active symbols from settings")
+        
         # LTP cache
         self.ltp_cache: Dict[str, float] = {}
         
@@ -39,6 +44,10 @@ class RealtimeBot:
         
         # Telegram bot reference (set by launcher)
         self.telegram_bot = None
+        
+        # Cached broker manager (IMPORTANT: reuse to avoid rate limits)
+        self.broker_manager = None
+        self.cached_broker = None
         
         logger.info("Realtime Bot initialized")
     
@@ -60,9 +69,9 @@ class RealtimeBot:
             with open('config/settings.yaml', 'w') as f:
                 yaml.safe_dump(full_config, f, default_flow_style=False, allow_unicode=True)
             
-            logger.info("✅ Settings saved to config/settings.yaml")
+            logger.info("[OK] Settings saved to config/settings.yaml")
         except Exception as e:
-            logger.error(f"❌ Failed to save settings: {e}")
+            logger.error(f"[FAIL] Failed to save settings: {e}")
     
     def update_settings(self, key: str, value: Any):
         """Update a setting"""
@@ -76,6 +85,29 @@ class RealtimeBot:
         
         # Save settings
         self.save_settings()
+    
+    def get_broker(self):
+        """Get or create broker instance (cached to avoid rate limits)"""
+        try:
+            from core.broker_manager import BrokerManager
+            
+            # Create broker manager if not exists
+            if not self.broker_manager:
+                self.broker_manager = BrokerManager()
+                
+                # Authenticate once
+                if self.broker_manager.set_active_broker(self.settings['broker']):
+                    self.cached_broker = self.broker_manager.get_active_broker()
+                    logger.info(f"[OK] Broker authenticated: {self.settings['broker']}")
+                else:
+                    logger.error("[FAIL] Failed to authenticate broker")
+                    return None
+            
+            return self.cached_broker
+            
+        except Exception as e:
+            logger.error(f"Error getting broker: {e}")
+            return None
     
     def get_ltp(self, symbol: str) -> float:
         """
@@ -94,20 +126,16 @@ class RealtimeBot:
     def update_ltp_all_symbols(self):
         """Update LTP for all active symbols"""
         try:
-            from core.broker_manager import BrokerManager
-            
             active_symbols = self.symbol_manager.get_active_symbols()
             
             if not active_symbols:
                 return
             
-            # Get broker manager
-            broker_mgr = BrokerManager()
-            if not broker_mgr.set_active_broker(self.settings['broker']):
-                logger.error("Failed to set active broker")
+            # Get cached broker (authenticates only once)
+            broker = self.get_broker()
+            if not broker:
+                logger.error("No broker available")
                 return
-            
-            broker = broker_mgr.get_active_broker()
             
             for symbol_info in active_symbols:
                 try:
@@ -138,16 +166,12 @@ class RealtimeBot:
             DataFrame with OHLCV data
         """
         try:
-            from core.broker_manager import BrokerManager
             from datetime import datetime, timedelta
             
-            # Get broker manager
-            broker_mgr = BrokerManager()
-            if not broker_mgr.set_active_broker(self.settings['broker']):
-                logger.error("Failed to set active broker")
+            # Get cached broker
+            broker = self.get_broker()
+            if not broker:
                 return pd.DataFrame()
-            
-            broker = broker_mgr.get_active_broker()
             
             # Get data for last 100 candles
             to_date = datetime.now().strftime('%Y-%m-%d')

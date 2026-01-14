@@ -1,63 +1,132 @@
+# ALGO BY GUGAN - Settings Configuration
+# Separate settings for Backtest and Realtime bots
+
+timezone: "Asia/Kolkata"
+
+# ========================================
+# BACKTEST BOT SETTINGS
+# ========================================
 backtest_bot:
+  # Schedule
   schedule:
-    all_days: true
-    end_time: '12:00'
-    start_time: 06:00
+    start_time: "06:00"
+    end_time: "12:00"
+    all_days: true  # Run on weekends too
+  
+  # Backtest parameters
   session_duration_months: 4
-  start_date: '2010-01-01'
-default_settings:
-  active_strategies:
-  - 5EMA_PowerOfStocks
-  active_symbols:
-  - broker: angelone
-    exchange: NFO
-    lot_size: 65
-    segment: NSE_FO
-    symbol: NIFTY27JAN26FUT
-    tick_size: 10.0
-    token: '49229'
-  - broker: angelone
-    exchange: NSE
-    lot_size: 1
-    segment: NSE_EQ
-    symbol: NIFTY
-    tick_size: 0.0
-    token: '26000'
-  - broker: angelone
-    exchange: NSE
-    lot_size: 1
-    segment: NSE_EQ
-    symbol: BANKNIFTY
-    tick_size: 0.0
-    token: '26009'
-  broker: angelone
-  capital: 100000
-  max_trades: 10
-  mode: paper
-  risk_per_trade: 2.0
-  segment: NSE_FO
-logging:
-  format: '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-  level: DEBUG
-  retention_days: 15
-paths:
-  backtest_state: data/backtest_state
-  historical_data: data/historical
-  logs_backtest: logs/backtest
-  logs_realtime: logs/realtime
-  master_lists: data/master_lists
-  trades_backtest: trades/backtest_trades.csv
-  trades_realtime: trades/realtime_trades.csv
+  start_date: "2010-01-01"
+  
+  # Trading settings (can be different from realtime)
+  trading:
+    broker: "angelone"
+    segment: "NSE_FO"
+    capital: 100000
+    risk_per_trade: 2.0
+    max_trades: 5
+    mode: "paper"  # Always paper for backtest
+    
+    # Active strategies for backtest
+    active_strategies:
+      - "5EMA_PowerOfStocks"
+      - "SMA_Crossover"
+    
+    # Active symbols for backtest
+    active_symbols:
+      - symbol: "NIFTY27JAN26FUT"
+        segment: "NSE_FO"
+        exchange: "NFO"
+        lot_size: 65
+        tick_size: 10.0
+        token: "49229"
+        broker: "angelone"
+      
+      - symbol: "BANKNIFTY29JAN26FUT"
+        segment: "NSE_FO"
+        exchange: "NFO"
+        lot_size: 30
+        tick_size: 5.0
+        token: "41661"
+        broker: "angelone"
+
+# ========================================
+# REALTIME BOT SETTINGS
+# ========================================
 realtime_bot:
-  ltp_update_interval: 600
+  # Schedule
   schedule:
-    end_time: '16:05'
-    start_time: 08:55
-    weekdays_only: true
+    start_time: "08:55"
+    end_time: "16:05"
+    weekdays_only: true  # No trading on weekends
+  
+  # LTP update interval (seconds)
+  ltp_update_interval: 600
+  
+  # Trading settings (independent from backtest)
+  trading:
+    broker: "angelone"
+    segment: "NSE_FO"
+    capital: 50000  # Different capital for realtime
+    risk_per_trade: 1.5  # More conservative for live
+    max_trades: 3  # Fewer simultaneous trades
+    mode: "paper"  # Start with paper, switch to live when ready
+    
+    # Active strategies for realtime
+    active_strategies:
+      - "5EMA_PowerOfStocks"
+    
+    # Active symbols for realtime
+    active_symbols:
+      - symbol: "NIFTY27JAN26FUT"
+        segment: "NSE_FO"
+        exchange: "NFO"
+        lot_size: 65
+        tick_size: 10.0
+        token: "49229"
+        broker: "angelone"
+      
+      - symbol: "NIFTY"
+        segment: "NSE_EQ"
+        exchange: "NSE"
+        lot_size: 1
+        tick_size: 0.05
+        token: "26000"
+        broker: "angelone"
+
+# ========================================
+# LEGACY SETTINGS (for backward compatibility)
+# ========================================
+default_settings:
+  broker: "angelone"
+  segment: "NSE_FO"
+  capital: 100000
+  risk_per_trade: 2.0
+  max_trades: 5
+  mode: "paper"
+  active_strategies:
+    - "5EMA_PowerOfStocks"
+  active_symbols: []
+
+# ========================================
+# GLOBAL SETTINGS
+# ========================================
+logging:
+  retention_days: 15
+  level: "DEBUG"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+paths:
+  master_lists: "data/master_lists"
+  historical_data: "data/historical"
+  backtest_state: "data/backtest_state"
+  logs_backtest: "logs/backtest"
+  logs_realtime: "logs/realtime"
+  trades_backtest: "trades/backtest_trades.csv"
+  trades_realtime: "trades/realtime_trades.csv"
+
 segments:
-- NSE_EQ
-- NSE_FO
-- BSE_EQ
-- MCX_FO
-- CDS_FO
-timezone: Asia/Kolkata
+  - "NSE_EQ"
+  - "NSE_FO"
+  - "BSE_EQ"
+  - "MCX_FO"
+  - "CDS_FO"

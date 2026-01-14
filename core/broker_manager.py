@@ -1,6 +1,6 @@
 # core/broker_manager.py
 """
-Broker Manager - Unified interface for multiple brokers (OPTIMIZED)
+Broker Manager - Fixed for Oracle Cloud timeout issues
 """
 
 from abc import ABC, abstractmethod
@@ -9,6 +9,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from utils.helpers import load_secrets
 from utils.logger import setup_logger
+import time
 
 logger = setup_logger(__name__)
 
@@ -63,278 +64,331 @@ class BaseBroker(ABC):
 
 
 class AngelOneSmartAPIBroker(BaseBroker):
-    """AngelOne SmartAPI implementation - OPTIMIZED"""
+    """AngelOne SmartAPI - Fixed for Oracle Cloud timeout"""
     
     def __init__(self):
         super().__init__("angelone")
         self.smart_api = None
-        self._token_cache = {}  # Cache tokens to avoid repeated lookups
+        self._token_cache = {}
         self._last_auth_time = None
-        self._auth_valid_hours = 6  # Re-authenticate after 6 hours
+        self._auth_valid_hours = 6
+        self._max_retries = 3
+        self._retry_delay = 2
     
     def authenticate(self) -> bool:
-        """Authenticate with AngelOne SmartAPI"""
-        try:
-            # Check if recent authentication is still valid
-            if self._last_auth_time:
-                hours_since_auth = (datetime.now() - self._last_auth_time).total_seconds() / 3600
-                if hours_since_auth < self._auth_valid_hours and self.is_authenticated:
-                    self.logger.info("Using existing authentication")
-                    return True
-            
-            from SmartApi import SmartConnect
-            import pyotp
-            
-            # Initialize SmartAPI
-            self.smart_api = SmartConnect(api_key=self.credentials['api_key'])
-            
-            # Generate TOTP
-            totp = pyotp.TOTP(self.credentials['totp_secret']).now()
-            
-            # Login
-            data = self.smart_api.generateSession(
-                clientCode=self.credentials['client_id'],
-                password=self.credentials['password'],
-                totp=totp
-            )
-            
-            if data and data.get('status'):
-                self.logger.info("AngelOne authentication successful")
-                self.is_authenticated = True
-                self._last_auth_time = datetime.now()
+        """Authenticate with retry logic for Oracle Cloud"""
+        # Check if recent authentication is still valid
+        if self._last_auth_time:
+            hours_since_auth = (datetime.now() - self._last_auth_time).total_seconds() / 3600
+            if hours_since_auth < self._auth_valid_hours and self.is_authenticated:
+                self.logger.info("✅ Using existing authentication")
                 return True
-            else:
-                error_msg = data.get('message', 'Unknown error') if data else 'No response'
-                self.logger.error(f"AngelOne authentication failed: {error_msg}")
-                return False
+        
+        # Try authentication with retries
+        for attempt in range(self._max_retries):
+            try:
+                from SmartApi import SmartConnect
+                import pyotp
                 
-        except Exception as e:
-            self.logger.error(f"AngelOne authentication failed: {e}", exc_info=True)
-            return False
+                self.logger.info(f"🔄 Authentication attempt {attempt + 1}/{self._max_retries}")
+                
+                # Initialize with longer timeout
+                self.smart_api = SmartConnect(
+                    api_key=self.credentials['api_key'],
+                    timeout=30  # Increased timeout for Oracle Cloud
+                )
+                
+                # Generate TOTP
+                totp = pyotp.TOTP(self.credentials['totp_secret']).now()
+                self.logger.info(f"🔑 Generated TOTP: {totp}")
+                
+                # Login with retry
+                data = self.smart_api.generateSession(
+                    clientCode=self.credentials['client_id'],
+                    password=self.credentials['password'],
+                    totp=totp
+                )
+                
+                if data and data.get('status'):
+                    self.logger.info("✅ AngelOne authentication successful")
+                    self.is_authenticated = True
+                    self._last_auth_time = datetime.now()
+                    return True
+                else:
+                    error_msg = data.get('message', 'Unknown error') if data else 'No response'
+                    self.logger.error(f"❌ AngelOne authentication failed: {error_msg}")
+                    
+                    # If invalid credentials, don't retry
+                    if 'Invalid' in error_msg or 'incorrect' in error_msg.lower():
+                        return False
+                    
+                    # Wait before retry
+                    if attempt < self._max_retries - 1:
+                        self.logger.info(f"⏳ Waiting {self._retry_delay}s before retry...")
+                        time.sleep(self._retry_delay)
+                        
+            except Exception as e:
+                error_str = str(e)
+                self.logger.error(f"❌ Authentication attempt {attempt + 1} failed: {error_str}")
+                
+                # Check if it's a timeout error
+                if 'timeout' in error_str.lower() or 'timed out' in error_str.lower():
+                    self.logger.warning("⚠️ Connection timeout - Oracle Cloud may be blocking outbound HTTPS")
+                    self.logger.info("💡 Trying with different network settings...")
+                    
+                    # Wait longer before retry on timeout
+                    if attempt < self._max_retries - 1:
+                        wait_time = self._retry_delay * (attempt + 1)
+                        self.logger.info(f"⏳ Waiting {wait_time}s before retry...")
+                        time.sleep(wait_time)
+                else:
+                    # Non-timeout error, fail immediately
+                    self.logger.error(f"❌ Critical error: {e}", exc_info=True)
+                    return False
+        
+        # All retries failed
+        self.logger.error("❌ All authentication attempts failed")
+        self._print_troubleshooting()
+        return False
+    
+    def _print_troubleshooting(self):
+        """Print troubleshooting steps for Oracle Cloud"""
+        self.logger.error("\n" + "="*60)
+        self.logger.error("🔧 TROUBLESHOOTING STEPS FOR ORACLE CLOUD:")
+        self.logger.error("="*60)
+        self.logger.error("\n1. Check Oracle Cloud Firewall:")
+        self.logger.error("   sudo iptables -L -n | grep 443")
+        self.logger.error("   sudo iptables -A OUTPUT -p tcp --dport 443 -j ACCEPT")
+        self.logger.error("\n2. Test connection to AngelOne:")
+        self.logger.error("   curl -v https://apiconnect.angelone.in")
+        self.logger.error("\n3. Check DNS resolution:")
+        self.logger.error("   nslookup apiconnect.angelone.in")
+        self.logger.error("\n4. Check if proxy is needed:")
+        self.logger.error("   echo $http_proxy")
+        self.logger.error("   echo $https_proxy")
+        self.logger.error("\n5. Verify credentials in config/secrets.yaml")
+        self.logger.error("\n6. Try from local machine first to verify credentials")
+        self.logger.error("="*60 + "\n")
     
     def get_ltp(self, symbol: str, exchange: str) -> Optional[float]:
-        """Get LTP from AngelOne - OPTIMIZED"""
+        """Get LTP with retry logic"""
         if not self.is_authenticated:
-            self.logger.error("Not authenticated with AngelOne")
+            self.logger.error("❌ Not authenticated with AngelOne")
             return None
         
-        try:
-            # Get token from cache or lookup
-            token = self._get_token(symbol, exchange)
-            if not token:
+        for attempt in range(self._max_retries):
+            try:
+                token = self._get_token(symbol, exchange)
+                if not token:
+                    return None
+                
+                ltp_data = self.smart_api.ltpData(exchange, symbol, token)
+                
+                if ltp_data and ltp_data.get('status'):
+                    return float(ltp_data['data']['ltp'])
+                
                 return None
-            
-            # Fetch LTP
-            ltp_data = self.smart_api.ltpData(exchange, symbol, token)
-            
-            if ltp_data and ltp_data.get('status'):
-                return float(ltp_data['data']['ltp'])
-            
-            return None
-            
-        except Exception as e:
-            self.logger.error(f"Error fetching LTP for {symbol}: {e}")
-            return None
+                
+            except Exception as e:
+                if 'timeout' in str(e).lower() and attempt < self._max_retries - 1:
+                    self.logger.warning(f"⚠️ LTP timeout, retry {attempt + 1}")
+                    time.sleep(1)
+                    continue
+                
+                self.logger.error(f"❌ Error fetching LTP for {symbol}: {e}")
+                return None
+        
+        return None
     
     def get_historical_data(self, symbol: str, exchange: str,
                           from_date: str, to_date: str,
                           interval: str = "ONE_MINUTE") -> Optional[pd.DataFrame]:
-        """Get historical data from AngelOne - OPTIMIZED with better error handling"""
+        """Get historical data with retry logic"""
         if not self.is_authenticated:
-            self.logger.error("Not authenticated with AngelOne")
+            self.logger.error("❌ Not authenticated with AngelOne")
             return None
         
-        try:
-            # Get token
-            token = self._get_token(symbol, exchange)
-            if not token:
-                self.logger.error(f"Token not found for {symbol}")
-                return None
-            
-            # Validate and parse dates
+        for attempt in range(self._max_retries):
             try:
-                dt_from = datetime.strptime(from_date, '%Y-%m-%d %H:%M')
-                dt_to = datetime.strptime(to_date, '%Y-%m-%d %H:%M')
-            except ValueError:
-                # Try alternative format
-                try:
-                    dt_from = datetime.strptime(from_date, '%Y-%m-%d')
-                    dt_to = datetime.strptime(to_date, '%Y-%m-%d')
-                    # Add time component
-                    from_date = dt_from.strftime('%Y-%m-%d 09:15')
-                    to_date = dt_to.strftime('%Y-%m-%d 15:30')
-                except ValueError as e:
-                    self.logger.error(f"Invalid date format: {e}. Use 'YYYY-MM-DD HH:MM' or 'YYYY-MM-DD'")
+                token = self._get_token(symbol, exchange)
+                if not token:
+                    self.logger.error(f"❌ Token not found for {symbol}")
                     return None
-            
-            # Check date range validity
-            if dt_from >= dt_to:
-                self.logger.error("from_date must be before to_date")
-                return None
-            
-            # Check if dates are too old (AngelOne limit: ~1 year for intraday data)
-            days_ago = (datetime.now() - dt_from).days
-            if days_ago > 365:
-                self.logger.warning(f"Data {days_ago} days old - AngelOne may not have it")
-            
-            # Map interval to AngelOne format
-            interval_map = {
-                '1minute': 'ONE_MINUTE',
-                '1min': 'ONE_MINUTE',
-                '5minute': 'FIVE_MINUTE',
-                '5min': 'FIVE_MINUTE',
-                '15minute': 'FIFTEEN_MINUTE',
-                '15min': 'FIFTEEN_MINUTE',
-                '1hour': 'ONE_HOUR',
-                '1day': 'ONE_DAY'
-            }
-            
-            angelone_interval = interval_map.get(interval.lower(), interval)
-            
-            params = {
-                "exchange": exchange,
-                "symboltoken": token,
-                "interval": angelone_interval,
-                "fromdate": from_date,
-                "todate": to_date
-            }
-            
-            self.logger.info(f"Fetching {symbol} data from {from_date} to {to_date}")
-            
-            # Fetch data
-            hist_data = self.smart_api.getCandleData(params)
-            
-            # Check response
-            if not hist_data:
-                self.logger.error("Empty response from AngelOne API")
-                return None
-            
-            if hist_data.get('status') is False:
-                error_msg = hist_data.get('message', 'Unknown error')
-                self.logger.error(f"AngelOne API error: {error_msg}")
                 
-                # Common error handling
-                if 'No data' in error_msg or 'no candle' in error_msg.lower():
-                    self.logger.warning(f"No data available for {symbol} in specified range")
-                elif 'Invalid' in error_msg:
-                    self.logger.error("Invalid parameters or symbol")
+                # Validate dates
+                try:
+                    dt_from = datetime.strptime(from_date, '%Y-%m-%d %H:%M')
+                    dt_to = datetime.strptime(to_date, '%Y-%m-%d %H:%M')
+                except ValueError:
+                    try:
+                        dt_from = datetime.strptime(from_date, '%Y-%m-%d')
+                        dt_to = datetime.strptime(to_date, '%Y-%m-%d')
+                        from_date = dt_from.strftime('%Y-%m-%d 09:15')
+                        to_date = dt_to.strftime('%Y-%m-%d 15:30')
+                    except ValueError as e:
+                        self.logger.error(f"❌ Invalid date format: {e}")
+                        return None
                 
+                # Map interval
+                interval_map = {
+                    '1minute': 'ONE_MINUTE',
+                    '1min': 'ONE_MINUTE',
+                    '5minute': 'FIVE_MINUTE',
+                    '5min': 'FIVE_MINUTE',
+                    '15minute': 'FIFTEEN_MINUTE',
+                    '15min': 'FIFTEEN_MINUTE',
+                    '1hour': 'ONE_HOUR',
+                    '1day': 'ONE_DAY'
+                }
+                
+                angelone_interval = interval_map.get(interval.lower(), interval)
+                
+                params = {
+                    "exchange": exchange,
+                    "symboltoken": token,
+                    "interval": angelone_interval,
+                    "fromdate": from_date,
+                    "todate": to_date
+                }
+                
+                self.logger.info(f"📊 Fetching {symbol} from {from_date} to {to_date}")
+                
+                hist_data = self.smart_api.getCandleData(params)
+                
+                if not hist_data:
+                    if attempt < self._max_retries - 1:
+                        self.logger.warning(f"⚠️ Empty response, retry {attempt + 1}")
+                        time.sleep(2)
+                        continue
+                    self.logger.error("❌ Empty response from AngelOne API")
+                    return None
+                
+                if hist_data.get('status') is False:
+                    error_msg = hist_data.get('message', 'Unknown error')
+                    self.logger.error(f"❌ AngelOne API error: {error_msg}")
+                    return None
+                
+                data = hist_data.get('data', [])
+                
+                if not data:
+                    self.logger.warning(f"⚠️ No candle data for {symbol}")
+                    return None
+                
+                df = pd.DataFrame(
+                    data,
+                    columns=['timestamp', 'open', 'high', 'low', 'close', 'volume']
+                )
+                
+                df['timestamp'] = pd.to_datetime(df['timestamp'])
+                df = df.sort_values('timestamp').reset_index(drop=True)
+                
+                for col in ['open', 'high', 'low', 'close', 'volume']:
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+                
+                df = df.dropna()
+                
+                self.logger.info(f"✅ Retrieved {len(df)} candles for {symbol}")
+                return df
+                
+            except Exception as e:
+                if 'timeout' in str(e).lower() and attempt < self._max_retries - 1:
+                    self.logger.warning(f"⚠️ Timeout, retry {attempt + 1}")
+                    time.sleep(2)
+                    continue
+                
+                self.logger.error(f"❌ Error fetching historical data: {e}", exc_info=True)
                 return None
-            
-            data = hist_data.get('data', [])
-            
-            if not data or len(data) == 0:
-                self.logger.warning(f"No candle data returned for {symbol}")
-                return None
-            
-            # Create DataFrame
-            df = pd.DataFrame(
-                data,
-                columns=['timestamp', 'open', 'high', 'low', 'close', 'volume']
-            )
-            
-            # Process data
-            df['timestamp'] = pd.to_datetime(df['timestamp'])
-            df = df.sort_values('timestamp').reset_index(drop=True)
-            
-            # Convert to numeric types
-            for col in ['open', 'high', 'low', 'close', 'volume']:
-                df[col] = pd.to_numeric(df[col], errors='coerce')
-            
-            # Remove any NaN rows
-            df = df.dropna()
-            
-            self.logger.info(f"Retrieved {len(df)} candles for {symbol}")
-            return df
-            
-        except Exception as e:
-            self.logger.error(f"Error fetching historical data: {e}", exc_info=True)
-            return None
+        
+        return None
     
     def place_order(self, symbol: str, exchange: str,
                    transaction_type: str, quantity: int,
                    order_type: str = "MARKET",
                    price: float = 0.0) -> Optional[str]:
-        """Place order with AngelOne - OPTIMIZED"""
+        """Place order with retry logic"""
         if not self.is_authenticated:
-            self.logger.error("Not authenticated with AngelOne")
+            self.logger.error("❌ Not authenticated with AngelOne")
             return None
         
-        try:
-            # Get token
-            token = self._get_token(symbol, exchange)
-            if not token:
+        for attempt in range(self._max_retries):
+            try:
+                token = self._get_token(symbol, exchange)
+                if not token:
+                    return None
+                
+                order_params = {
+                    "variety": "NORMAL",
+                    "tradingsymbol": symbol,
+                    "symboltoken": token,
+                    "transactiontype": transaction_type.upper(),
+                    "exchange": exchange,
+                    "ordertype": order_type.upper(),
+                    "producttype": "INTRADAY",
+                    "duration": "DAY",
+                    "price": str(price) if order_type.upper() == "LIMIT" else "0",
+                    "squareoff": "0",
+                    "stoploss": "0",
+                    "quantity": str(quantity)
+                }
+                
+                order_response = self.smart_api.placeOrder(order_params)
+                
+                if order_response and order_response.get('status'):
+                    order_id = order_response['data']['orderid']
+                    self.logger.info(f"✅ Order placed: {order_id}")
+                    return order_id
+                else:
+                    error_msg = order_response.get('message', 'Unknown') if order_response else 'No response'
+                    
+                    if attempt < self._max_retries - 1 and 'timeout' in error_msg.lower():
+                        self.logger.warning(f"⚠️ Order timeout, retry {attempt + 1}")
+                        time.sleep(1)
+                        continue
+                    
+                    self.logger.error(f"❌ Order failed: {error_msg}")
+                    return None
+                
+            except Exception as e:
+                if 'timeout' in str(e).lower() and attempt < self._max_retries - 1:
+                    self.logger.warning(f"⚠️ Timeout, retry {attempt + 1}")
+                    time.sleep(1)
+                    continue
+                
+                self.logger.error(f"❌ Error placing order: {e}", exc_info=True)
                 return None
-            
-            # Prepare order params
-            order_params = {
-                "variety": "NORMAL",
-                "tradingsymbol": symbol,
-                "symboltoken": token,
-                "transactiontype": transaction_type.upper(),
-                "exchange": exchange,
-                "ordertype": order_type.upper(),
-                "producttype": "INTRADAY",
-                "duration": "DAY",
-                "price": str(price) if order_type.upper() == "LIMIT" else "0",
-                "squareoff": "0",
-                "stoploss": "0",
-                "quantity": str(quantity)
-            }
-            
-            # Place order
-            order_response = self.smart_api.placeOrder(order_params)
-            
-            if order_response and order_response.get('status'):
-                order_id = order_response['data']['orderid']
-                self.logger.info(f"Order placed: {order_id} - {transaction_type} {quantity} {symbol}")
-                return order_id
-            else:
-                error_msg = order_response.get('message', 'Unknown error') if order_response else 'No response'
-                self.logger.error(f"Order placement failed: {error_msg}")
-                return None
-            
-        except Exception as e:
-            self.logger.error(f"Error placing order: {e}", exc_info=True)
-            return None
+        
+        return None
     
     def get_positions(self) -> List[Dict[str, Any]]:
-        """Get positions from AngelOne"""
+        """Get positions"""
         if not self.is_authenticated:
             return []
         
         try:
             position_response = self.smart_api.position()
-            
             if position_response and position_response.get('status'):
                 return position_response.get('data', [])
-            
             return []
-            
         except Exception as e:
-            self.logger.error(f"Error fetching positions: {e}")
+            self.logger.error(f"❌ Error fetching positions: {e}")
             return []
     
     def get_orders(self) -> List[Dict[str, Any]]:
-        """Get orders from AngelOne"""
+        """Get orders"""
         if not self.is_authenticated:
             return []
         
         try:
             order_response = self.smart_api.orderBook()
-            
             if order_response and order_response.get('status'):
                 return order_response.get('data', [])
-            
             return []
-            
         except Exception as e:
-            self.logger.error(f"Error fetching orders: {e}")
+            self.logger.error(f"❌ Error fetching orders: {e}")
             return []
     
     def _get_token(self, symbol: str, exchange: str) -> Optional[str]:
-        """Get instrument token - OPTIMIZED with caching"""
-        # Check cache first
+        """Get instrument token with caching"""
         cache_key = f"{exchange}:{symbol}"
         if cache_key in self._token_cache:
             return self._token_cache[cache_key]
@@ -342,7 +396,6 @@ class AngelOneSmartAPIBroker(BaseBroker):
         try:
             from core.symbol_manager import SymbolManager
             
-            # Map exchange to segment
             segment_map = {
                 'NSE': 'NSE_EQ',
                 'NFO': 'NSE_FO',
@@ -352,76 +405,24 @@ class AngelOneSmartAPIBroker(BaseBroker):
             }
             
             segment = segment_map.get(exchange, 'NSE_FO')
-            
-            # Create symbol manager instance
             sym_mgr = SymbolManager('angelone')
-            
-            # Get symbol details
             details = sym_mgr.get_symbol_details(segment, symbol, broker='angelone')
             
             if details and details.get('token'):
                 token = str(details['token'])
-                # Cache the token
                 self._token_cache[cache_key] = token
                 return token
             
-            self.logger.warning(f"Token not found for {symbol} in {segment}")
+            self.logger.warning(f"⚠️ Token not found for {symbol}")
             return None
             
         except Exception as e:
-            self.logger.error(f"Error getting token for {symbol}: {e}")
+            self.logger.error(f"❌ Error getting token: {e}")
             return None
-
-
-class ZerodhaKiteBroker(BaseBroker):
-    """Zerodha Kite Connect API implementation"""
-    
-    def __init__(self):
-        super().__init__("zerodha")
-        self.kite = None
-    
-    def authenticate(self) -> bool:
-        """Authenticate with Zerodha Kite"""
-        try:
-            # TODO: Implement Kite Connect authentication
-            self.logger.warning("Zerodha authentication not implemented yet")
-            return False
-            
-        except Exception as e:
-            self.logger.error(f"Zerodha authentication failed: {e}")
-            return False
-    
-    def get_ltp(self, symbol: str, exchange: str) -> Optional[float]:
-        """Get LTP from Zerodha"""
-        self.logger.warning("Zerodha LTP not implemented yet")
-        return None
-    
-    def get_historical_data(self, symbol: str, exchange: str,
-                          from_date: str, to_date: str,
-                          interval: str = "minute") -> Optional[pd.DataFrame]:
-        """Get historical data from Zerodha"""
-        self.logger.warning("Zerodha historical data not implemented yet")
-        return None
-    
-    def place_order(self, symbol: str, exchange: str,
-                   transaction_type: str, quantity: int,
-                   order_type: str = "MARKET",
-                   price: float = 0.0) -> Optional[str]:
-        """Place order with Zerodha"""
-        self.logger.warning("Zerodha order placement not implemented yet")
-        return None
-    
-    def get_positions(self) -> List[Dict[str, Any]]:
-        """Get positions from Zerodha"""
-        return []
-    
-    def get_orders(self) -> List[Dict[str, Any]]:
-        """Get orders from Zerodha"""
-        return []
 
 
 class BrokerManager:
-    """Manage multiple broker instances - OPTIMIZED"""
+    """Manage multiple broker instances"""
     
     def __init__(self):
         self.brokers: Dict[str, BaseBroker] = {}
@@ -433,43 +434,34 @@ class BrokerManager:
         """Initialize all enabled brokers"""
         secrets = load_secrets()
         
-        # Initialize AngelOne
         if secrets['brokers']['angelone'].get('enabled', False):
             try:
                 self.brokers['angelone'] = AngelOneSmartAPIBroker()
-                self.logger.info("Initialized AngelOne broker")
+                self.logger.info("✅ Initialized AngelOne broker")
             except Exception as e:
-                self.logger.error(f"Failed to initialize AngelOne: {e}")
-        
-        # Initialize Zerodha
-        if secrets['brokers']['zerodha'].get('enabled', False):
-            try:
-                self.brokers['zerodha'] = ZerodhaKiteBroker()
-                self.logger.info("Initialized Zerodha broker")
-            except Exception as e:
-                self.logger.error(f"Failed to initialize Zerodha: {e}")
+                self.logger.error(f"❌ Failed to initialize AngelOne: {e}")
     
     def set_active_broker(self, broker_name: str) -> bool:
-        """Set active broker with authentication"""
+        """Set active broker"""
         if broker_name not in self.brokers:
-            self.logger.error(f"Broker {broker_name} not initialized")
+            self.logger.error(f"❌ Broker {broker_name} not initialized")
             return False
         
         broker = self.brokers[broker_name]
         
         if not broker.is_authenticated:
             if not broker.authenticate():
-                self.logger.error(f"Failed to authenticate with {broker_name}")
+                self.logger.error(f"❌ Failed to authenticate with {broker_name}")
                 return False
         
         self.active_broker = broker
-        self.logger.info(f"Active broker set to: {broker_name}")
+        self.logger.info(f"✅ Active broker: {broker_name}")
         return True
     
     def get_active_broker(self) -> Optional[BaseBroker]:
-        """Get currently active broker"""
+        """Get active broker"""
         return self.active_broker
     
     def get_available_brokers(self) -> List[str]:
-        """Get list of available broker names"""
+        """Get available brokers"""
         return list(self.brokers.keys())

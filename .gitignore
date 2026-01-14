@@ -95,3 +95,43 @@ data/upstox/*.csv~
 # Azure VM specific
 *.pid
 nohup.out
+
+# === ALGO BY GUGAN ===
+
+# Secrets (NEVER commit these!)
+config/secrets.yaml
+.env
+.env.local
+.env.*.local
+
+# Logs
+logs/
+*.log
+*.log.*
+
+# Historical Data (too large for git)
+data/historical/
+data/backtest_state/
+
+# Trade Data
+trades/*.csv
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db

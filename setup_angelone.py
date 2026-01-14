@@ -43,16 +43,16 @@ def test_connection():
         )
         
         if data['status']:
-            print("✅ Login successful!")
+            print("[OK] Login successful!")
             print(f"   User ID: {data['data']['clientcode']}")
             print(f"   Name: {data['data']['name']}")
             return smart_api
         else:
-            print(f"❌ Login failed: {data}")
+            print(f"[ERROR] Login failed: {data}")
             return None
             
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f"[ERROR] Error: {e}")
         return None
 
 def download_master_contracts(smart_api):
@@ -74,7 +74,7 @@ def download_master_contracts(smart_api):
         
         if response.status_code == 200:
             all_instruments = response.json()
-            print(f"✅ Downloaded {len(all_instruments)} total instruments")
+            print(f"[OK] Downloaded {len(all_instruments)} total instruments")
             
             # Filter and save by segment
             segments = {
@@ -104,15 +104,15 @@ def download_master_contracts(smart_api):
                     file_path = master_dir / f"angelone_{segment}.json"
                     with open(file_path, 'w') as f:
                         json.dump(instruments, f, indent=2)
-                    print(f"✅ Saved {len(instruments)} {segment} instruments")
+                    print(f"[OK] Saved {len(instruments)} {segment} instruments")
                 else:
-                    print(f"⚠️  No {segment} instruments found")
+                    print(f"[WARNING]  No {segment} instruments found")
                     
         else:
-            print(f"❌ Download failed: HTTP {response.status_code}")
+            print(f"[ERROR] Download failed: HTTP {response.status_code}")
             
     except Exception as e:
-        print(f"❌ Error downloading master: {e}")
+        print(f"[ERROR] Error downloading master: {e}")
         print("💡 Manual download: https://margincalculator.angelone.in/OpenAPI_File/files/OpenAPIScripMaster.json")
 
 
@@ -139,22 +139,22 @@ def test_ltp(smart_api):
             
             if ltp_data and ltp_data['status']:
                 ltp = ltp_data['data']['ltp']
-                print(f"✅ {test['symbol']}: ₹{ltp}")
+                print(f"[OK] {test['symbol']}: ₹{ltp}")
             else:
-                print(f"⚠️  Failed to fetch LTP: {ltp_data}")
+                print(f"[WARNING]  Failed to fetch LTP: {ltp_data}")
                 
         except Exception as e:
-            print(f"❌ Error: {e}")
+            print(f"[ERROR] Error: {e}")
 
 def main():
     """Main setup function"""
-    print("\n🚀 Starting AngelOne SmartAPI Setup\n")
+    print("\n[START] Starting AngelOne SmartAPI Setup\n")
     
     # Test connection
     smart_api = test_connection()
     
     if not smart_api:
-        print("\n❌ Connection failed. Please check your credentials in config/secrets.yaml")
+        print("\n[ERROR] Connection failed. Please check your credentials in config/secrets.yaml")
         return
     
     # Download master contracts
@@ -164,7 +164,7 @@ def main():
     test_ltp(smart_api)
     
     print("\n" + "=" * 60)
-    print("✅ Setup Complete!")
+    print("[OK] Setup Complete!")
     print("=" * 60)
     print("\nNext steps:")
     print("1. Check data/master_lists/ for downloaded contracts")

@@ -1,125 +1,86 @@
-# config/secrets.yaml
+# utils/logger.py
 """
-Logging utility with automatic old log deletion
+Logging configuration with auto-cleanup and UTF-8 support
 """
 
 import logging
-import os
-from datetime import datetime, timedelta
+import sys
 from pathlib import Path
+from datetime import datetime, timedelta
+import os
 
-def load_settings():
-    """Load settings with error handling"""
-    try:
-        import yaml
-        with open('config/settings.yaml', 'r') as f:
-            return yaml.safe_load(f)
-    except Exception as e:
-        # Return minimal default settings if config can't be loaded
-        return {
-            'logging': {
-                'retention_days': 15,
-                'level': 'DEBUG',
-                'format': '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-            },
-            'paths': {
-                'logs_backtest': 'logs/backtest',
-                'logs_realtime': 'logs/realtime'
-            }
-        }
-
-def cleanup_old_logs(log_dir: str, retention_days: int = 15):
-    """Delete log files older than retention_days"""
-    try:
-        cutoff_date = datetime.now() - timedelta(days=retention_days)
-        log_path = Path(log_dir)
-        
-        if not log_path.exists():
-            return
-        
-        for log_file in log_path.glob("*.log"):
-            file_time = datetime.fromtimestamp(log_file.stat().st_mtime)
-            if file_time < cutoff_date:
-                try:
-                    log_file.unlink()
-                    print(f"Deleted old log: {log_file.name}")
-                except Exception as e:
-                    print(f"Error deleting {log_file.name}: {e}")
-    except Exception as e:
-        print(f"Error in cleanup_old_logs: {e}")
-
-def setup_logger(name: str, bot_type: str = "realtime") -> logging.Logger:
+def setup_logger(name: str, bot_type: str = "backtest", level: str = "INFO") -> logging.Logger:
     """
-    Setup logger with date-wise file logging
+    Setup logger with file and console handlers
     
     Args:
         name: Logger name
         bot_type: 'backtest' or 'realtime'
-    
-    Returns:
-        Configured logger instance
+        level: Logging level
     """
-    settings = load_settings()
-    
-    # Determine log directory with fallback
-    try:
-        if bot_type == "backtest":
-            log_dir = settings.get('paths', {}).get('logs_backtest', 'logs/backtest')
-        else:
-            log_dir = settings.get('paths', {}).get('logs_realtime', 'logs/realtime')
-    except:
-        log_dir = f'logs/{bot_type}'
-    
-    # Create log directory if it doesn't exist
-    Path(log_dir).mkdir(parents=True, exist_ok=True)
-    
-    # Cleanup old logs
-    try:
-        retention_days = settings.get('logging', {}).get('retention_days', 15)
-        cleanup_old_logs(log_dir, retention_days)
-    except:
-        pass
-    
-    # Create date-wise log file
-    log_file = os.path.join(
-        log_dir,
-        f"{datetime.now().strftime('%Y-%m-%d')}.log"
-    )
-    
-    # Setup logger
     logger = logging.getLogger(name)
+    logger.setLevel(getattr(logging, level))
     
-    # Get log level with fallback
-    try:
-        log_level = settings.get('logging', {}).get('level', 'DEBUG')
-        logger.setLevel(getattr(logging, log_level))
-    except:
-        logger.setLevel(logging.DEBUG)
-    
-    # Remove existing handlers to avoid duplicates
+    # Remove existing handlers
     logger.handlers.clear()
     
-    # File handler
-    file_handler = logging.FileHandler(log_file)
+    # Create logs directory
+    log_dir = Path(f"logs/{bot_type}")
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Log file path with date
+    log_file = log_dir / f"{datetime.now().strftime('%Y-%m-%d')}.log"
+    
+    # File handler with UTF-8 encoding
+    file_handler = logging.FileHandler(log_file, encoding='utf-8')
     file_handler.setLevel(logging.DEBUG)
     
-    # Console handler
-    console_handler = logging.StreamHandler()
+    # Console handler with UTF-8 encoding
+    console_handler = logging.StreamHandler(sys.stdout)
     console_handler.setLevel(logging.INFO)
     
-    # Formatter with fallback
-    try:
-        log_format = settings.get('logging', {}).get('format', 
-                                                      '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        formatter = logging.Formatter(log_format)
-    except:
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    # Set encoding for Windows console
+    if sys.platform == 'win32':
+        try:
+            # Try to set UTF-8 encoding for Windows console
+            sys.stdout.reconfigure(encoding='utf-8')
+        except:
+            pass
+    
+    # Format without emojis for better compatibility
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S'
+    )
     
     file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
     
-    # Add handlers
     logger.addHandler(file_handler)
     logger.addHandler(console_handler)
     
+    # Cleanup old logs
+    cleanup_old_logs(log_dir, retention_days=15)
+    
     return logger
+
+
+def cleanup_old_logs(log_dir: Path, retention_days: int = 15):
+    """
+    Remove log files older than retention_days
+    
+    Args:
+        log_dir: Directory containing log files
+        retention_days: Number of days to keep logs
+    """
+    try:
+        cutoff_date = datetime.now() - timedelta(days=retention_days)
+        
+        for log_file in log_dir.glob("*.log"):
+            file_date = datetime.strptime(log_file.stem, '%Y-%m-%d')
+            if file_date < cutoff_date:
+                log_file.unlink()
+                
+    except Exception as e:
+        # Don't fail if cleanup fails
+        pass

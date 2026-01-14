@@ -32,7 +32,7 @@ class BacktestTelegramBot:
         """Handle /start command"""
         keyboard = [
             [InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
-            [InlineKeyboardButton("📊 Stats", callback_data="stats")],
+            [InlineKeyboardButton("[INFO] Stats", callback_data="stats")],
             [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -54,10 +54,10 @@ class BacktestTelegramBot:
         keyboard = [
             [InlineKeyboardButton("📍 Segment/Symbols", callback_data="set_symbols")],
             [InlineKeyboardButton("🏦 Broker", callback_data="set_broker")],
-            [InlineKeyboardButton("💰 Capital", callback_data="set_capital")],
-            [InlineKeyboardButton("⚠️ Risk", callback_data="set_risk")],
+            [InlineKeyboardButton("Rs. Capital", callback_data="set_capital")],
+            [InlineKeyboardButton("[WARNING] Risk", callback_data="set_risk")],
             [InlineKeyboardButton("🔢 Max Trades", callback_data="set_max_trades")],
-            [InlineKeyboardButton("📊 Strategies", callback_data="set_strategies")],
+            [InlineKeyboardButton("[INFO] Strategies", callback_data="set_strategies")],
             [InlineKeyboardButton("🔄 Reset State", callback_data="reset_state")],
             [InlineKeyboardButton("« Back", callback_data="main_menu")]
         ]
@@ -69,11 +69,11 @@ class BacktestTelegramBot:
             "⚙️ *Backtest Settings*\n\n"
             f"🏦 Broker: `{settings['broker']}`\n"
             f"📍 Segment: `{settings['segment']}`\n"
-            f"💰 Capital: `{format_number(settings['capital'])}`\n"
-            f"⚠️ Risk: `{settings['risk_per_trade']}%`\n"
+            f"Rs. Capital: `{format_number(settings['capital'])}`\n"
+            f"[WARNING] Risk: `{settings['risk_per_trade']}%`\n"
             f"🔢 Max Trades: `{settings['max_trades']}`\n"
-            f"📊 Active Strategies: `{len(settings['active_strategies'])}`\n"
-            f"📈 Active Symbols: `{len(settings['active_symbols'])}`\n\n"
+            f"[INFO] Active Strategies: `{len(settings['active_strategies'])}`\n"
+            f" Active Symbols: `{len(settings['active_symbols'])}`\n\n"
             "_Backtest processes 4 months of data per day_"
         )
         
@@ -90,7 +90,7 @@ class BacktestTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            "📊 *Backtest Statistics*\n\n"
+            "[INFO] *Backtest Statistics*\n\n"
             f"*Total Trades:* `{stats['total_trades']}`\n"
             f"*Total PnL:* {format_pnl(stats['total_pnl'])}\n\n"
             f"*Win Rate:* `{stats['win_rate']:.2f}%`\n"
@@ -107,13 +107,13 @@ class BacktestTelegramBot:
         await query.answer()
         
         keyboard = [
-            [InlineKeyboardButton("✅ Yes, Reset", callback_data="reset_confirmed")],
-            [InlineKeyboardButton("❌ Cancel", callback_data="settings")]
+            [InlineKeyboardButton("[OK] Yes, Reset", callback_data="reset_confirmed")],
+            [InlineKeyboardButton("[ERROR] Cancel", callback_data="settings")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            "⚠️ *Reset Backtest State*\n\n"
+            "[WARNING] *Reset Backtest State*\n\n"
             "This will:\n"
             "• Clear all backtest progress\n"
             "• Start from the beginning date\n"
@@ -133,7 +133,7 @@ class BacktestTelegramBot:
         keyboard = [[InlineKeyboardButton("« Back", callback_data="main_menu")]]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        message = "✅ *Backtest state reset successfully*\n\nWill start from beginning on next run."
+        message = "[OK] *Backtest state reset successfully*\n\nWill start from beginning on next run."
         
         await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
     
@@ -247,7 +247,7 @@ class BacktestTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            f"💰 *Capital Setting*\n\n"
+            f"Rs. *Capital Setting*\n\n"
             f"Current capital: {format_number(settings['capital'])}\n\n"
             "To change capital, use command:\n"
             "`/setcapital AMOUNT`\n\n"
@@ -273,7 +273,7 @@ class BacktestTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            f"⚠️ *Risk per Trade*\n\n"
+            f"[WARNING] *Risk per Trade*\n\n"
             f"Current risk: `{settings['risk_per_trade']}%`\n\n"
             "Select risk percentage:"
         )
@@ -314,11 +314,11 @@ class BacktestTelegramBot:
         
         keyboard = [
             [InlineKeyboardButton(
-                f"{'✅' if '5EMA_PowerOfStocks' in active_strategies else '☐'} 5 EMA Power of Stocks",
+                f"{'[OK]' if '5EMA_PowerOfStocks' in active_strategies else '☐'} 5 EMA Power of Stocks",
                 callback_data="strategy_5ema"
             )],
             [InlineKeyboardButton(
-                f"{'✅' if 'SMA_Crossover' in active_strategies else '☐'} SMA Crossover",
+                f"{'[OK]' if 'SMA_Crossover' in active_strategies else '☐'} SMA Crossover",
                 callback_data="strategy_sma"
             )],
             [InlineKeyboardButton("« Back", callback_data="settings")]
@@ -326,7 +326,7 @@ class BacktestTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            f"📊 *Strategy Selection*\n\n"
+            f"[INFO] *Strategy Selection*\n\n"
             f"Active strategies: {len(active_strategies)}\n\n"
             "Click to toggle strategies:"
         )
@@ -340,7 +340,7 @@ class BacktestTelegramBot:
         
         keyboard = [
             [InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
-            [InlineKeyboardButton("📊 Stats", callback_data="stats")],
+            [InlineKeyboardButton("[INFO] Stats", callback_data="stats")],
             [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -365,7 +365,7 @@ class BacktestTelegramBot:
     async def send_session_complete(self, stats: Dict[str, Any]):
         """Send session complete notification"""
         message = (
-            "✅ *Backtest Session Complete*\n\n"
+            "[OK] *Backtest Session Complete*\n\n"
             f"Symbol: `{stats['symbol']}`\n"
             f"Strategy: `{stats['strategy']}`\n"
             f"Period: `{stats['start_date']} to {stats['end_date']}`\n"
@@ -434,7 +434,7 @@ class BacktestTelegramBot:
         try:
             if update and update.effective_message:
                 await update.effective_message.reply_text(
-                    "⚠️ An error occurred. Please try again."
+                    "[WARNING] An error occurred. Please try again."
                 )
         except Exception as e:
             logger.error(f"Could not send error message: {e}")
@@ -461,13 +461,13 @@ class BacktestTelegramBot:
             self.bot_controller.update_settings('active_symbols', active_symbols)
             
             await update.message.reply_text(
-                f"✅ Added symbol: `{symbol}` from `{segment}`\n"
+                f"[OK] Added symbol: `{symbol}` from `{segment}`\n"
                 f"Total active symbols: {len(active_symbols)}",
                 parse_mode='Markdown'
             )
         else:
             await update.message.reply_text(
-                f"❌ Failed to add symbol: `{symbol}`\n"
+                f"[ERROR] Failed to add symbol: `{symbol}`\n"
                 "Make sure the segment and symbol are correct.",
                 parse_mode='Markdown'
             )
@@ -493,13 +493,13 @@ class BacktestTelegramBot:
             self.bot_controller.update_settings('active_symbols', active_symbols)
             
             await update.message.reply_text(
-                f"✅ Removed symbol: `{symbol}`\n"
+                f"[OK] Removed symbol: `{symbol}`\n"
                 f"Total active symbols: {len(active_symbols)}",
                 parse_mode='Markdown'
             )
         else:
             await update.message.reply_text(
-                f"❌ Symbol not found: `{symbol}`",
+                f"[ERROR] Symbol not found: `{symbol}`",
                 parse_mode='Markdown'
             )
     
@@ -541,11 +541,11 @@ class BacktestTelegramBot:
             self.bot_controller.update_settings('capital', capital)
             
             await update.message.reply_text(
-                f"✅ Capital set to: {format_number(capital)}",
+                f"[OK] Capital set to: {format_number(capital)}",
                 parse_mode='Markdown'
             )
         except ValueError:
             await update.message.reply_text(
-                "❌ Invalid amount. Please provide a number.",
+                "[ERROR] Invalid amount. Please provide a number.",
                 parse_mode='Markdown'
             )

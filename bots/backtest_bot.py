@@ -60,9 +60,9 @@ class BacktestBot:
             with open('config/settings.yaml', 'w') as f:
                 yaml.safe_dump(full_config, f, default_flow_style=False, allow_unicode=True)
             
-            logger.info("✅ Settings saved to config/settings.yaml")
+            logger.info("[OK] Settings saved to config/settings.yaml")
         except Exception as e:
-            logger.error(f"❌ Failed to save settings: {e}")
+            logger.error(f"[ERROR] Failed to save settings: {e}")
 
     def update_settings(self, key: str, value: Any):
         """Update a setting"""

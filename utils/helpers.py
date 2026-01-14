@@ -1,33 +1,141 @@
-# config/secrets.yaml
+# utils/helpers.py
 """
-Common utility functions
+Common utility functions - Optimized version
 """
 
 import yaml
+import os
 from datetime import datetime
 import pytz
-from typing import Dict, Any
+from typing import Dict, Any, List, Union
+from pathlib import Path
 
 def load_secrets() -> Dict[str, Any]:
-    """Load secrets from YAML file with error handling"""
-    try:
-        with open('config/secrets.yaml', 'r') as f:
-            return yaml.safe_load(f)
-    except FileNotFoundError:
-        print("⚠️ config/secrets.yaml not found. Please create it.")
+    """
+    Load secrets from environment variables (production) or YAML file (local)
+    
+    Priority:
+    1. Environment variables (Railway, Oracle Cloud, etc.)
+    2. config/secrets.yaml (local development)
+    """
+    # Check if running in production (Railway, Oracle Cloud, etc.)
+    if os.getenv('TELEGRAM_REALTIME_TOKEN') or os.getenv('RAILWAY_ENVIRONMENT'):
         return {
             'telegram': {
-                'backtest': {'bot_token': '', 'chat_id': ''},
-                'realtime': {'bot_token': '', 'chat_id': ''}
+                'backtest': {
+                    'bot_token': os.getenv('TELEGRAM_BACKTEST_TOKEN', ''),
+                    'chat_ids': os.getenv('TELEGRAM_BACKTEST_CHAT_IDS', '').split(',') if os.getenv('TELEGRAM_BACKTEST_CHAT_IDS') else []
+                },
+                'realtime': {
+                    'bot_token': os.getenv('TELEGRAM_REALTIME_TOKEN', ''),
+                    'chat_ids': os.getenv('TELEGRAM_REALTIME_CHAT_IDS', '').split(',') if os.getenv('TELEGRAM_REALTIME_CHAT_IDS') else []
+                }
             },
             'brokers': {
-                'angelone': {'enabled': False},
-                'zerodha': {'enabled': False}
+                'angelone': {
+                    'api_key': os.getenv('ANGELONE_API_KEY', ''),
+                    'client_id': os.getenv('ANGELONE_CLIENT_ID', ''),
+                    'password': os.getenv('ANGELONE_PASSWORD', ''),
+                    'totp_secret': os.getenv('ANGELONE_TOTP_SECRET', ''),
+                    'enabled': os.getenv('ANGELONE_ENABLED', 'true').lower() == 'true'
+                },
+                'zerodha': {
+                    'api_key': os.getenv('ZERODHA_API_KEY', ''),
+                    'api_secret': os.getenv('ZERODHA_API_SECRET', ''),
+                    'enabled': os.getenv('ZERODHA_ENABLED', 'false').lower() == 'true'
+                }
             }
         }
+    
+    # Local development - use YAML file
+    try:
+        secrets_file = Path('config/secrets.yaml')
+        if not secrets_file.exists():
+            print("[WARNING] config/secrets.yaml not found. Creating template...")
+            create_secrets_template()
+            return get_default_secrets()
+        
+        with open(secrets_file, 'r', encoding='utf-8') as f:
+            secrets = yaml.safe_load(f)
+        
+        # Normalize chat_id/chat_ids format
+        for bot_type in ['backtest', 'realtime']:
+            if bot_type in secrets.get('telegram', {}):
+                tg_config = secrets['telegram'][bot_type]
+                
+                # Convert single chat_id to chat_ids list
+                if 'chat_id' in tg_config and 'chat_ids' not in tg_config:
+                    tg_config['chat_ids'] = [tg_config['chat_id']]
+                elif 'chat_ids' in tg_config:
+                    # Ensure it's a list
+                    if isinstance(tg_config['chat_ids'], str):
+                        tg_config['chat_ids'] = [tg_config['chat_ids']]
+        
+        return secrets
+        
+    except FileNotFoundError:
+        print("[ERROR] config/secrets.yaml not found. Please create it.")
+        return get_default_secrets()
     except Exception as e:
-        print(f"⚠️ Error loading secrets.yaml: {e}")
-        return {'telegram': {}, 'brokers': {}}
+        print(f"[ERROR] Error loading secrets.yaml: {e}")
+        return get_default_secrets()
+
+def get_default_secrets() -> Dict[str, Any]:
+    """Return default secrets structure"""
+    return {
+        'telegram': {
+            'backtest': {'bot_token': '', 'chat_ids': []},
+            'realtime': {'bot_token': '', 'chat_ids': []}
+        },
+        'brokers': {
+            'angelone': {'enabled': False},
+            'zerodha': {'enabled': False}
+        }
+    }
+
+def create_secrets_template():
+    """Create a template secrets.yaml file"""
+    template = """# ALGO BY GUGAN - Secrets Configuration
+# IMPORTANT: Never commit this file to git!
+
+telegram:
+  backtest:
+    bot_token: "YOUR_BACKTEST_BOT_TOKEN_FROM_BOTFATHER"
+    chat_ids:
+      - "YOUR_CHAT_ID_FROM_USERINFOBOT"
+      # Add more chat IDs for multiple users:
+      # - "123456789"
+      # - "987654321"
+  
+  realtime:
+    bot_token: "YOUR_REALTIME_BOT_TOKEN_FROM_BOTFATHER"
+    chat_ids:
+      - "YOUR_CHAT_ID_FROM_USERINFOBOT"
+
+brokers:
+  zerodha:
+    api_key: "your_zerodha_api_key"
+    api_secret: "your_zerodha_api_secret"
+    enabled: false
+  
+  angelone:
+    api_key: "your_angelone_api_key"
+    client_id: "your_angelone_client_id"
+    password: "your_angelone_password"
+    totp_secret: "your_angelone_totp_secret"
+    enabled: true
+
+# How to get these values:
+# 1. Telegram Bot Token: Message @BotFather on Telegram, create bot, copy token
+# 2. Chat ID: Message @userinfobot on Telegram, copy your ID
+# 3. AngelOne: Register at smartapi.angelbroking.com
+# 4. TOTP Secret: Run: python -c "import pyotp; print(pyotp.random_base32())"
+"""
+    
+    os.makedirs('config', exist_ok=True)
+    with open('config/secrets.yaml', 'w', encoding='utf-8') as f:
+        f.write(template)
+    print("[OK] Created config/secrets.yaml template")
 
 def load_settings() -> Dict[str, Any]:
     """Load settings from YAML file with comprehensive error handling"""
@@ -72,50 +180,51 @@ def load_settings() -> Dict[str, Any]:
             'risk_per_trade': 2.0,
             'max_trades': 5,
             'mode': 'paper',
-            'active_strategies': [],
+            'active_strategies': ['5EMA_PowerOfStocks'],
             'active_symbols': []
         }
     }
     
     try:
-        with open('config/settings.yaml', 'r') as f:
-            loaded_config = yaml.safe_load(f)
-            
-        # Merge loaded config with defaults (defaults as fallback)
-        if loaded_config:
-            # Deep merge default_settings if it exists
-            if 'default_settings' in loaded_config:
-                for key, value in default_config['default_settings'].items():
-                    if key not in loaded_config['default_settings']:
-                        loaded_config['default_settings'][key] = value
-            else:
-                loaded_config['default_settings'] = default_config['default_settings']
-            
-            # Ensure other required keys exist
-            for key, value in default_config.items():
-                if key not in loaded_config:
-                    loaded_config[key] = value
-            
-            return loaded_config
-        else:
+        settings_file = Path('config/settings.yaml')
+        
+        if not settings_file.exists():
+            print("[WARNING] config/settings.yaml not found. Creating with defaults...")
+            create_settings_file(default_config)
             return default_config
-            
-    except FileNotFoundError:
-        print("⚠️ config/settings.yaml not found. Using defaults.")
-        # Create the file with defaults
-        try:
-            import os
-            os.makedirs('config', exist_ok=True)
-            with open('config/settings.yaml', 'w') as f:
-                yaml.safe_dump(default_config, f, default_flow_style=False)
-            print("✅ Created config/settings.yaml with default settings")
-        except Exception as e:
-            print(f"⚠️ Could not create config/settings.yaml: {e}")
-        return default_config
+        
+        with open(settings_file, 'r', encoding='utf-8') as f:
+            loaded_config = yaml.safe_load(f)
+        
+        if not loaded_config:
+            return default_config
+        
+        # Deep merge with defaults
+        merged_config = merge_configs(default_config, loaded_config)
+        return merged_config
         
     except Exception as e:
-        print(f"⚠️ Error loading settings.yaml: {e}. Using defaults.")
+        print(f"[ERROR] Error loading settings.yaml: {e}. Using defaults.")
         return default_config
+
+def merge_configs(default: Dict, loaded: Dict) -> Dict:
+    """Deep merge two configuration dictionaries"""
+    result = default.copy()
+    
+    for key, value in loaded.items():
+        if key in result and isinstance(result[key], dict) and isinstance(value, dict):
+            result[key] = merge_configs(result[key], value)
+        else:
+            result[key] = value
+    
+    return result
+
+def create_settings_file(config: Dict[str, Any]):
+    """Create settings.yaml file"""
+    os.makedirs('config', exist_ok=True)
+    with open('config/settings.yaml', 'w', encoding='utf-8') as f:
+        yaml.safe_dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
+    print("[OK] Created config/settings.yaml")
 
 def get_ist_time() -> datetime:
     """Get current time in IST timezone"""
@@ -151,11 +260,12 @@ def is_market_hours(bot_type: str = "realtime") -> bool:
         
         return start_time <= current <= end_time
     except Exception as e:
-        print(f"⚠️ Error checking market hours: {e}")
+        print(f"[ERROR] Error checking market hours: {e}")
         return True  # Default to allowing operation
 
 def calculate_quantity(capital: float, risk_percent: float, 
-                       price: float, lot_size: int = 1) -> int:
+                       price: float, stop_loss: float, 
+                       lot_size: int = 1) -> int:
     """
     Calculate position quantity based on risk management
     
@@ -163,41 +273,57 @@ def calculate_quantity(capital: float, risk_percent: float,
         capital: Available capital
         risk_percent: Risk percentage per trade
         price: Current price of instrument
+        stop_loss: Stop loss price
         lot_size: Lot size of the instrument
     
     Returns:
         Calculated quantity in lots
     """
     try:
+        # Calculate risk per unit
+        risk_per_unit = abs(price - stop_loss)
+        
+        if risk_per_unit <= 0:
+            print("[WARNING] Invalid stop loss, using default lot size")
+            return lot_size
+        
+        # Calculate maximum risk amount
         risk_amount = capital * (risk_percent / 100)
-        max_quantity = int(risk_amount / price)
+        
+        # Calculate quantity based on risk
+        max_quantity = int(risk_amount / risk_per_unit)
+        
+        # Ensure at least 1 lot
+        if max_quantity < lot_size:
+            return lot_size
         
         # Adjust for lot size
-        lots = max(1, max_quantity // lot_size)
+        lots = max_quantity // lot_size
         
-        return lots * lot_size
+        return max(1, lots) * lot_size
+        
     except Exception as e:
-        print(f"⚠️ Error calculating quantity: {e}")
+        print(f"[ERROR] Error calculating quantity: {e}")
         return lot_size  # Return minimum quantity
 
 def format_pnl(pnl: float) -> str:
-    """Format PnL with color emoji"""
+    """Format PnL with color indicator (no emoji for Windows compatibility)"""
     try:
         if pnl > 0:
-            return f"🟢 +₹{pnl:,.2f}"
+            return f"[+] Rs.{pnl:,.2f}"
         elif pnl < 0:
-            return f"🔴 ₹{pnl:,.2f}"
+            return f"[-] Rs.{pnl:,.2f}"
         else:
-            return f"⚪ ₹{pnl:,.2f}"
+            return f"[=] Rs.{pnl:,.2f}"
     except:
-        return f"⚪ ₹0.00"
+        return "[=] Rs.0.00"
 
 def format_number(num: float, decimals: int = 2) -> str:
     """Format number with Indian comma notation"""
     try:
-        return f"₹{num:,.{decimals}f}"
+        return f"Rs.{num:,.{decimals}f}"
     except:
-        return "₹0.00"
+        return "Rs.0.00"
 
 def get_symbol_filter_key(symbol: str) -> str:
     """
@@ -219,3 +345,83 @@ def get_symbol_filter_key(symbol: str) -> str:
             return "OTHER"
     except:
         return "OTHER"
+
+def validate_telegram_config() -> bool:
+    """
+    Validate telegram configuration
+    
+    Returns:
+        True if valid, False otherwise
+    """
+    try:
+        secrets = load_secrets()
+        
+        for bot_type in ['backtest', 'realtime']:
+            tg_config = secrets.get('telegram', {}).get(bot_type, {})
+            
+            if not tg_config.get('bot_token'):
+                print(f"[ERROR] Missing bot_token for {bot_type} bot")
+                return False
+            
+            chat_ids = tg_config.get('chat_ids', [])
+            if not chat_ids:
+                print(f"[ERROR] Missing chat_ids for {bot_type} bot")
+                return False
+        
+        return True
+        
+    except Exception as e:
+        print(f"[ERROR] Error validating telegram config: {e}")
+        return False
+
+def get_authorized_chat_ids(bot_type: str = 'realtime') -> List[str]:
+    """
+    Get list of authorized chat IDs for a bot
+    
+    Args:
+        bot_type: 'realtime' or 'backtest'
+    
+    Returns:
+        List of chat IDs as strings
+    """
+    try:
+        secrets = load_secrets()
+        tg_config = secrets.get('telegram', {}).get(bot_type, {})
+        chat_ids = tg_config.get('chat_ids', [])
+        
+        # Ensure all are strings
+        return [str(cid) for cid in chat_ids]
+    except:
+        return []
+
+def is_authorized_user(chat_id: Union[str, int], bot_type: str = 'realtime') -> bool:
+    """
+    Check if a chat ID is authorized to use the bot
+    
+    Args:
+        chat_id: Telegram chat ID
+        bot_type: 'realtime' or 'backtest'
+    
+    Returns:
+        True if authorized
+    """
+    authorized_ids = get_authorized_chat_ids(bot_type)
+    return str(chat_id) in authorized_ids
+
+def ensure_directories():
+    """Create all required directories if they don't exist"""
+    directories = [
+        'config',
+        'data/master_lists',
+        'data/historical',
+        'data/backtest_state',
+        'logs/backtest',
+        'logs/realtime',
+        'trades'
+    ]
+    
+    for directory in directories:
+        Path(directory).mkdir(parents=True, exist_ok=True)
+
+# Initialize directories on import
+ensure_directories()

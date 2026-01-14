@@ -24,7 +24,7 @@ data/temp/
 *.log.*
 
 # Config secrets (CRITICAL - Never commit)
-
+config/secrets.yaml
 config/secrets.json
 .env
 .env.local

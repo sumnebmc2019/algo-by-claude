@@ -1,4 +1,4 @@
-# tg/helpers.py
+# telegram/helpers.py
 """
 Helper functions for telegram bots with multi-chat support
 """

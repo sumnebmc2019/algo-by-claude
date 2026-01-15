@@ -30,12 +30,12 @@ class AlgoFixer:
     
     def print_success(self, text):
         """Print success message"""
-        print(f"  [OK] {text}")
+        print(f"  ✅ {text}")
         self.fixes_applied.append(text)
     
     def print_error(self, text):
         """Print error message"""
-        print(f"  [ERROR] {text}")
+        print(f"  ❌ {text}")
         self.errors.append(text)
     
     def fix_emoji_in_files(self):
@@ -43,15 +43,14 @@ class AlgoFixer:
         self.print_step("Fixing emoji characters in code...")
         
         replacements = {
-            '[OK]': '[OK]',
-            '[ERROR]': '[ERROR]',
-            '[WARNING]': '[WARNING]',
-            '[WARNING]': '[WARNING]',
-            '[INFO]': '[INFO]',
-            '[START]': '[START]',
-            '[STOP]': '[STOP]',
-            '[STOP]': '[STOP]',
-            'Rs.': 'Rs.',
+            '✅': '✅',
+            '❌': '❌',
+            '⚠️': '⚠️',
+            'ℹ️': 'ℹ️',
+            '🚀': '🚀',
+            '⛔': '⛔',
+            '⛔': '⛔',
+            '₹': '₹',
             '': '',
             '': '',
             '': '',
@@ -543,9 +542,9 @@ async def test_telegram():
                     chat_id=chat_id,
                     text="[TEST] Realtime bot is working!"
                 )
-                print(f"   [OK] Sent to {chat_id}")
+                print(f"   ✅ Sent to {chat_id}")
             except Exception as e:
-                print(f"   [ERROR] Failed to send to {chat_id}: {e}")
+                print(f"   ❌ Failed to send to {chat_id}: {e}")
         
         # Test backtest bot
         print("\\n2. Testing Backtest Bot...")
@@ -570,19 +569,19 @@ async def test_telegram():
                     chat_id=chat_id,
                     text="[TEST] Backtest bot is working!"
                 )
-                print(f"   [OK] Sent to {chat_id}")
+                print(f"   ✅ Sent to {chat_id}")
             except Exception as e:
-                print(f"   [ERROR] Failed to send to {chat_id}: {e}")
+                print(f"   ❌ Failed to send to {chat_id}: {e}")
         
         print("\\n" + "=" * 60)
         print("[SUCCESS] All tests passed!")
         print("=" * 60)
         
     except FileNotFoundError:
-        print("[ERROR] config/secrets.yaml not found!")
+        print("❌ config/secrets.yaml not found!")
         print("Create it using the template in .env.template")
     except Exception as e:
-        print(f"[ERROR] Test failed: {e}")
+        print(f"❌ Test failed: {e}")
         import traceback
         traceback.print_exc()
 
@@ -605,7 +604,7 @@ if __name__ == "__main__":
             print(f"  {i}. {fix}")
         
         if self.errors:
-            print(f"\n[WARNING] {len(self.errors)} errors occurred:")
+            print(f"\n⚠️ {len(self.errors)} errors occurred:")
             for i, error in enumerate(self.errors, 1):
                 print(f"  {i}. {error}")
         

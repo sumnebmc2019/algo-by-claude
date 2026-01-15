@@ -32,7 +32,7 @@ class RealtimeTelegramBot:
         """Handle /start command"""
         keyboard = [
             [InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
-            [InlineKeyboardButton("[INFO] Stats", callback_data="stats")],
+            [InlineKeyboardButton("ℹ️ Stats", callback_data="stats")],
             [InlineKeyboardButton(" Positions", callback_data="positions")],
             [InlineKeyboardButton("🛑 Close All", callback_data="close_all")],
             [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")]
@@ -54,10 +54,10 @@ class RealtimeTelegramBot:
         keyboard = [
             [InlineKeyboardButton("📍 Segment/Symbols", callback_data="set_symbols")],
             [InlineKeyboardButton("🏦 Broker", callback_data="set_broker")],
-            [InlineKeyboardButton("Rs. Capital", callback_data="set_capital")],
-            [InlineKeyboardButton("[WARNING] Risk", callback_data="set_risk")],
+            [InlineKeyboardButton("₹ Capital", callback_data="set_capital")],
+            [InlineKeyboardButton("⚠️ Risk", callback_data="set_risk")],
             [InlineKeyboardButton("🔢 Max Trades", callback_data="set_max_trades")],
-            [InlineKeyboardButton("[INFO] Strategies", callback_data="set_strategies")],
+            [InlineKeyboardButton("ℹ️ Strategies", callback_data="set_strategies")],
             [InlineKeyboardButton("🔄 Paper/Live", callback_data="toggle_mode")],
             [InlineKeyboardButton("« Back", callback_data="main_menu")]
         ]
@@ -69,11 +69,11 @@ class RealtimeTelegramBot:
             "⚙️ *Current Settings*\n\n"
             f"🏦 Broker: `{settings['broker']}`\n"
             f"📍 Segment: `{settings['segment']}`\n"
-            f"Rs. Capital: `{format_number(settings['capital'])}`\n"
-            f"[WARNING] Risk: `{settings['risk_per_trade']}%`\n"
+            f"₹ Capital: `{format_number(settings['capital'])}`\n"
+            f"⚠️ Risk: `{settings['risk_per_trade']}%`\n"
             f"🔢 Max Trades: `{settings['max_trades']}`\n"
             f"🔄 Mode: `{settings['mode'].upper()}`\n"
-            f"[INFO] Active Strategies: `{len(settings['active_strategies'])}`\n"
+            f"ℹ️ Active Strategies: `{len(settings['active_strategies'])}`\n"
             f" Active Symbols: `{len(settings['active_symbols'])}`\n"
         )
         
@@ -90,7 +90,7 @@ class RealtimeTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            "[INFO] *Statistics & Performance*\n\n"
+            "ℹ️ *Statistics & Performance*\n\n"
             f"*Open Positions:* `{stats['open_positions']}`\n"
             f"*Closed Positions:* `{stats['closed_positions']}`\n\n"
             f"*Realized PnL:* {format_pnl(stats['realized_pnl'])}\n"
@@ -139,13 +139,13 @@ class RealtimeTelegramBot:
         await query.answer()
         
         keyboard = [
-            [InlineKeyboardButton("[OK] Yes, Close All", callback_data="close_all_confirmed")],
-            [InlineKeyboardButton("[ERROR] Cancel", callback_data="main_menu")]
+            [InlineKeyboardButton("✅ Yes, Close All", callback_data="close_all_confirmed")],
+            [InlineKeyboardButton("❌ Cancel", callback_data="main_menu")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            "[WARNING] *Close All Positions*\n\n"
+            "⚠️ *Close All Positions*\n\n"
             "Are you sure you want to close ALL open positions at current market price?\n\n"
             "This action cannot be undone!"
         )
@@ -163,7 +163,7 @@ class RealtimeTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            f"[OK] *Positions Closed*\n\n"
+            f"✅ *Positions Closed*\n\n"
             f"Closed {result['count']} positions\n"
             f"Total PnL: {format_pnl(result['total_pnl'])}"
         )
@@ -232,12 +232,12 @@ class RealtimeTelegramBot:
             if mode == "live":
                 # Show warning before switching to live
                 keyboard = [
-                    [InlineKeyboardButton("[OK] Yes, Go Live", callback_data="confirm_live")],
-                    [InlineKeyboardButton("[ERROR] Cancel", callback_data="toggle_mode")]
+                    [InlineKeyboardButton("✅ Yes, Go Live", callback_data="confirm_live")],
+                    [InlineKeyboardButton("❌ Cancel", callback_data="toggle_mode")]
                 ]
                 reply_markup = InlineKeyboardMarkup(keyboard)
                 message = (
-                    "[WARNING] *CONFIRM LIVE TRADING*\n\n"
+                    "⚠️ *CONFIRM LIVE TRADING*\n\n"
                     "You are about to switch to LIVE trading mode.\n"
                     "Real money will be at risk!\n\n"
                     "Are you sure you want to continue?"
@@ -249,7 +249,7 @@ class RealtimeTelegramBot:
                 await self.settings_menu(update, context)
         elif data == "confirm_live":
             self.bot_controller.update_settings('mode', 'live')
-            await query.answer("[WARNING] LIVE MODE ACTIVATED", show_alert=True)
+            await query.answer("⚠️ LIVE MODE ACTIVATED", show_alert=True)
             await self.settings_menu(update, context)
         else:
             await query.answer("Feature coming soon!", show_alert=True)
@@ -308,7 +308,7 @@ class RealtimeTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            f"Rs. *Capital Setting*\n\n"
+            f"₹ *Capital Setting*\n\n"
             f"Current capital: {format_number(settings['capital'])}\n\n"
             "To change capital, use command:\n"
             "`/setcapital AMOUNT`\n\n"
@@ -334,7 +334,7 @@ class RealtimeTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            f"[WARNING] *Risk per Trade*\n\n"
+            f"⚠️ *Risk per Trade*\n\n"
             f"Current risk: `{settings['risk_per_trade']}%`\n\n"
             "Select risk percentage:"
         )
@@ -375,11 +375,11 @@ class RealtimeTelegramBot:
         
         keyboard = [
             [InlineKeyboardButton(
-                f"{'[OK]' if '5EMA_PowerOfStocks' in active_strategies else '☐'} 5 EMA Power of Stocks",
+                f"{'✅' if '5EMA_PowerOfStocks' in active_strategies else '☐'} 5 EMA Power of Stocks",
                 callback_data="strategy_5ema"
             )],
             [InlineKeyboardButton(
-                f"{'[OK]' if 'SMA_Crossover' in active_strategies else '☐'} SMA Crossover",
+                f"{'✅' if 'SMA_Crossover' in active_strategies else '☐'} SMA Crossover",
                 callback_data="strategy_sma"
             )],
             [InlineKeyboardButton("« Back", callback_data="settings")]
@@ -387,7 +387,7 @@ class RealtimeTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            f"[INFO] *Strategy Selection*\n\n"
+            f"ℹ️ *Strategy Selection*\n\n"
             f"Active strategies: {len(active_strategies)}\n\n"
             "Click to toggle strategies:"
         )
@@ -418,7 +418,7 @@ class RealtimeTelegramBot:
         message = (
             f"🔄 *Trading Mode*\n\n"
             f"Current mode: `{current_mode.upper()}`\n\n"
-            "[WARNING] *Warning*: Live mode will execute real trades!\n"
+            "⚠️ *Warning*: Live mode will execute real trades!\n"
             "Only switch after thorough testing.\n\n"
             "Select mode:"
         )
@@ -432,7 +432,7 @@ class RealtimeTelegramBot:
         
         keyboard = [
             [InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
-            [InlineKeyboardButton("[INFO] Stats", callback_data="stats")],
+            [InlineKeyboardButton("ℹ️ Stats", callback_data="stats")],
             [InlineKeyboardButton(" Positions", callback_data="positions")],
             [InlineKeyboardButton("🛑 Close All", callback_data="close_all")],
             [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")]
@@ -523,7 +523,7 @@ class RealtimeTelegramBot:
         try:
             if update and update.effective_message:
                 await update.effective_message.reply_text(
-                    "[WARNING] An error occurred. Please try again."
+                    "⚠️ An error occurred. Please try again."
                 )
         except Exception as e:
             logger.error(f"Could not send error message: {e}")
@@ -550,13 +550,13 @@ class RealtimeTelegramBot:
             self.bot_controller.update_settings('active_symbols', active_symbols)
             
             await update.message.reply_text(
-                f"[OK] Added symbol: `{symbol}` from `{segment}`\n"
+                f"✅ Added symbol: `{symbol}` from `{segment}`\n"
                 f"Total active symbols: {len(active_symbols)}",
                 parse_mode='Markdown'
             )
         else:
             await update.message.reply_text(
-                f"[ERROR] Failed to add symbol: `{symbol}`\n"
+                f"❌ Failed to add symbol: `{symbol}`\n"
                 "Make sure the segment and symbol are correct.",
                 parse_mode='Markdown'
             )
@@ -582,13 +582,13 @@ class RealtimeTelegramBot:
             self.bot_controller.update_settings('active_symbols', active_symbols)
             
             await update.message.reply_text(
-                f"[OK] Removed symbol: `{symbol}`\n"
+                f"✅ Removed symbol: `{symbol}`\n"
                 f"Total active symbols: {len(active_symbols)}",
                 parse_mode='Markdown'
             )
         else:
             await update.message.reply_text(
-                f"[ERROR] Symbol not found: `{symbol}`",
+                f"❌ Symbol not found: `{symbol}`",
                 parse_mode='Markdown'
             )
     
@@ -630,11 +630,11 @@ class RealtimeTelegramBot:
             self.bot_controller.update_settings('capital', capital)
             
             await update.message.reply_text(
-                f"[OK] Capital set to: {format_number(capital)}",
+                f"✅ Capital set to: {format_number(capital)}",
                 parse_mode='Markdown'
             )
         except ValueError:
             await update.message.reply_text(
-                "[ERROR] Invalid amount. Please provide a number.",
+                "❌ Invalid amount. Please provide a number.",
                 parse_mode='Markdown'
             )

@@ -32,3 +32,6 @@ logzero==1.7.0
 
 # WebSocket
 websocket-client==1.8.0
+# Added by fix script
+numpy==1.26.2
+pandas==2.1.4

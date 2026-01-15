@@ -46,7 +46,7 @@ class SymbolManager:
                 data = json.load(f)
                 
             self.master_lists[cache_key] = data
-            self.logger.info(f"[OK] Loaded {len(data)} {current_broker} symbols from {segment}")
+            self.logger.info(f"✅ Loaded {len(data)} {current_broker} symbols from {segment}")
             return True
             
         except Exception as e:

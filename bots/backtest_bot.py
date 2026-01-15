@@ -1,6 +1,6 @@
-# config/secrets.yaml
+# bots/backtest_bot.py
 """
-Backtest Trading Bot - Historical Data Testing
+Backtest Trading Bot - Fixed with separate settings and emojis
 """
 
 import time
@@ -11,7 +11,7 @@ from core.symbol_manager import SymbolManager
 from core.position_manager import PositionManager
 from core.data_manager import DataManager
 from strategies.strategy_loader import StrategyLoader
-from utils.helpers import load_settings, is_market_hours, calculate_quantity
+from utils.helpers import get_bot_settings, is_market_hours, calculate_quantity
 from utils.logger import setup_logger
 from utils.trade_logger import TradeLogger
 import yaml
@@ -19,11 +19,28 @@ import yaml
 logger = setup_logger(__name__, "backtest")
 
 class BacktestBot:
-    """Backtest bot for historical data testing"""
+    """Backtest bot with separate settings support"""
     
     def __init__(self):
-        self.settings = load_settings()['default_settings']
-        self.backtest_settings = load_settings()['backtest_bot']
+        # Load backtest-specific settings
+        self.settings = get_bot_settings('backtest')
+        self.backtest_settings = self._load_backtest_specific_settings()
+        
+        logger.info("="*60)
+        logger.info("🚀 Initializing Backtest Bot with separate settings")
+        logger.info("="*60)
+        logger.info(f"📊 Broker: {self.settings['broker']}")
+        logger.info(f"📊 Segment: {self.settings['segment']}")
+        logger.info(f"💰 Capital: ₹{self.settings['capital']:,}")
+        logger.info(f"⚠️ Risk per trade: {self.settings['risk_per_trade']}%")
+        logger.info(f"🔢 Max trades: {self.settings['max_trades']}")
+        logger.info(f"📝 Mode: {self.settings['mode'].upper()}")
+        logger.info(f"🎯 Strategies: {', '.join(self.settings['active_strategies'])}")
+        logger.info(f"📈 Active symbols: {len(self.settings['active_symbols'])}")
+        logger.info(f"📅 Session duration: {self.backtest_settings['session_duration_months']} months")
+        logger.info(f"📅 Start date: {self.backtest_settings['start_date']}")
+        logger.info("="*60)
+        
         self.symbol_manager = SymbolManager(self.settings['broker'])
         self.data_manager = DataManager()
         self.strategy_loader = StrategyLoader()
@@ -32,15 +49,44 @@ class BacktestBot:
         # Load strategies
         self.strategy_loader.load_all_strategies()
         
-        # Load active symbols from settings
+        # Load active symbols
         if self.settings.get('active_symbols'):
             self.symbol_manager.active_symbols = self.settings['active_symbols']
-            logger.info(f"Loaded {len(self.settings['active_symbols'])} active symbols from settings")
+            logger.info(f"✅ Loaded {len(self.settings['active_symbols'])} active symbols")
         
         # Running state
         self.is_running = False
         
-        logger.info("Backtest Bot initialized")
+        logger.info("✅ Backtest Bot initialized successfully")
+    
+    def _load_backtest_specific_settings(self) -> Dict[str, Any]:
+        """Load backtest-specific settings (schedule, duration, etc.)"""
+        try:
+            with open('config/settings.yaml', 'r') as f:
+                full_config = yaml.safe_load(f)
+            
+            backtest_config = full_config.get('backtest_bot', {})
+            
+            return {
+                'session_duration_months': backtest_config.get('session_duration_months', 4),
+                'start_date': backtest_config.get('start_date', '2010-01-01'),
+                'schedule': backtest_config.get('schedule', {
+                    'start_time': '06:00',
+                    'end_time': '12:00',
+                    'all_days': True
+                })
+            }
+        except Exception as e:
+            logger.error(f"❌ Error loading backtest settings: {e}")
+            return {
+                'session_duration_months': 4,
+                'start_date': '2010-01-01',
+                'schedule': {
+                    'start_time': '06:00',
+                    'end_time': '12:00',
+                    'all_days': True
+                }
+            }
     
     def get_settings(self) -> Dict[str, Any]:
         """Get current settings"""
@@ -49,27 +95,31 @@ class BacktestBot:
     def save_settings(self):
         """Save settings to config file"""
         try:
-            # Load full config
             with open('config/settings.yaml', 'r') as f:
                 full_config = yaml.safe_load(f)
             
-            # Update default_settings
-            full_config['default_settings'] = self.settings
+            # Update backtest_bot.trading section
+            if 'backtest_bot' not in full_config:
+                full_config['backtest_bot'] = {}
+            if 'trading' not in full_config['backtest_bot']:
+                full_config['backtest_bot']['trading'] = {}
             
-            # Save back
+            # Update trading settings
+            full_config['backtest_bot']['trading'].update(self.settings)
+            
             with open('config/settings.yaml', 'w') as f:
-                yaml.safe_dump(full_config, f, default_flow_style=False, allow_unicode=True)
+                yaml.safe_dump(full_config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
             
-            logger.info("[OK] Settings saved to config/settings.yaml")
+            logger.info("✅ Settings saved to config/settings.yaml")
         except Exception as e:
-            logger.error(f"[ERROR] Failed to save settings: {e}")
+            logger.error(f"❌ Failed to save settings: {e}")
 
     def update_settings(self, key: str, value: Any):
         """Update a setting"""
         self.settings[key] = value
-        logger.info(f"Updated setting: {key} = {value}")
+        logger.info(f"✅ Updated setting: {key} = {value}")
 
-        # 🔥 CRITICAL: Recreate SymbolManager with NEW broker
+        # Recreate SymbolManager if broker changed
         if key == 'broker':
             self.symbol_manager = SymbolManager(value)
             logger.info(f"🔄 SymbolManager refreshed for broker: {value}")
@@ -78,43 +128,38 @@ class BacktestBot:
         self.save_settings()
     
     def run_backtest_session(self, symbol_info: Dict[str, Any], strategy_name: str):
-        """
-        Run one backtest session for symbol-strategy combination
-        
-        Args:
-            symbol_info: Symbol information dictionary
-            strategy_name: Strategy name
-        """
+        """Run one backtest session for symbol-strategy combination"""
         strategy = self.strategy_loader.get_strategy(strategy_name)
         if not strategy:
-            logger.error(f"Strategy {strategy_name} not found")
+            logger.error(f"❌ Strategy {strategy_name} not found")
             return
         
         symbol = symbol_info['symbol']
         segment = symbol_info['segment']
         
-        # Get next date range to backtest
+        # Get next date range
         start_date, end_date = self.data_manager.backtest_state.get_next_date_range(
             symbol=symbol,
             strategy=strategy_name,
             duration_months=self.backtest_settings['session_duration_months']
         )
         
-        # Check if we've reached current date
+        # Check if complete
         if start_date >= datetime.now():
-            logger.info(f"Backtest complete for {symbol}-{strategy_name}")
+            logger.info(f"✅ Backtest complete for {symbol}-{strategy_name}")
             return
         
-        logger.info(f"Backtesting {symbol} with {strategy_name} from {start_date.date()} to {end_date.date()}")
+        logger.info(f"📊 Backtesting {symbol} with {strategy_name}")
+        logger.info(f"📅 Period: {start_date.date()} to {end_date.date()}")
         
         # Load historical data
         data = self.data_manager.load_historical_data(symbol, segment, start_date, end_date)
         
         if data is None or data.empty:
-            logger.warning(f"No data available for {symbol}")
+            logger.warning(f"⚠️ No data available for {symbol}")
             return
         
-        # Initialize position manager for this session
+        # Initialize position manager
         position_manager = PositionManager()
         
         # Session stats
@@ -127,9 +172,8 @@ class BacktestBot:
             'pnl': 0.0
         }
         
-        # Iterate through each candle
+        # Iterate through candles
         for i in range(len(data)):
-            # Get data up to current point
             current_data = data.iloc[:i+1].copy()
             
             if len(current_data) < 2:
@@ -137,13 +181,12 @@ class BacktestBot:
             
             current_price = current_data.iloc[-1]['close']
             
-            # Check existing positions for exit conditions
+            # Check existing positions
             for position in position_manager.get_open_positions():
                 # Check stop loss
                 if position.check_stop_loss(current_price):
                     position_manager.close_position(position, current_price)
                     
-                    # Log trade
                     self.trade_logger.log_trade({
                         'symbol': symbol,
                         'segment': segment,
@@ -166,7 +209,6 @@ class BacktestBot:
                 elif position.check_target(current_price):
                     position_manager.close_position(position, current_price)
                     
-                    # Log trade
                     self.trade_logger.log_trade({
                         'symbol': symbol,
                         'segment': segment,
@@ -195,6 +237,7 @@ class BacktestBot:
                         capital=self.settings['capital'],
                         risk_percent=self.settings['risk_per_trade'],
                         price=signal['price'],
+                        stop_loss=signal.get('stop_loss', signal['price'] * 0.98),
                         lot_size=symbol_info['lot_size']
                     )
                     
@@ -227,7 +270,7 @@ class BacktestBot:
                     
                     session_stats['trades'] += 1
         
-        # Close any remaining positions at end of session
+        # Close remaining positions
         for position in position_manager.get_open_positions():
             final_price = data.iloc[-1]['close']
             position_manager.close_position(position, final_price)
@@ -241,25 +284,28 @@ class BacktestBot:
             stats=session_stats
         )
         
-        logger.info(f"Session complete: {session_stats['trades']} trades, PnL: {session_stats['pnl']:.2f}")
+        if session_stats['pnl'] >= 0:
+            logger.info(f"✅ Session complete: {session_stats['trades']} trades, PnL: 🟢 +₹{session_stats['pnl']:,.2f}")
+        else:
+            logger.info(f"✅ Session complete: {session_stats['trades']} trades, PnL: 🔴 ₹{session_stats['pnl']:,.2f}")
     
     def run_daily_backtest(self):
         """Run backtest for all active symbol-strategy combinations"""
         if not is_market_hours("backtest"):
-            logger.info("Outside backtest hours")
+            logger.info("⏸️ Outside backtest hours")
             return
         
-        logger.info("Starting daily backtest session")
+        logger.info("🚀 Starting daily backtest session")
         
         active_symbols = self.symbol_manager.get_active_symbols()
         active_strategies = self.settings['active_strategies']
         
         if not active_symbols:
-            logger.warning("No active symbols configured")
+            logger.warning("⚠️ No active symbols configured")
             return
         
         if not active_strategies:
-            logger.warning("No active strategies configured")
+            logger.warning("⚠️ No active strategies configured")
             return
         
         # Run backtest for each combination
@@ -268,13 +314,12 @@ class BacktestBot:
                 try:
                     self.run_backtest_session(symbol_info, strategy_name)
                 except Exception as e:
-                    logger.error(f"Error in backtest session: {e}", exc_info=True)
+                    logger.error(f"❌ Error in backtest session: {e}", exc_info=True)
         
-        logger.info("Daily backtest session complete")
+        logger.info("✅ Daily backtest session complete")
     
     def get_stats(self) -> Dict[str, Any]:
         """Get backtest statistics"""
-        # Load all trades and calculate stats
         trades = self.trade_logger.get_recent_trades(limit=1000)
         
         if not trades:
@@ -302,21 +347,21 @@ class BacktestBot:
     
     def start(self):
         """Start the bot"""
-        logger.info("Starting Backtest Bot")
+        logger.info("🚀 Starting Backtest Bot")
         self.is_running = True
         
-        # Get backtest schedule
+        # Get schedule from backtest settings
         start_time = self.backtest_settings['schedule']['start_time']
         
-        # Schedule daily backtest at start time
+        # Schedule daily backtest
         schedule.every().day.at(start_time).do(self.run_daily_backtest)
         
-        logger.info(f"Scheduled daily backtest at {start_time}")
+        logger.info(f"⏰ Scheduled daily backtest at {start_time}")
         
         # Run continuously
         while self.is_running:
             schedule.run_pending()
-            time.sleep(60)  # Check every minute
+            time.sleep(60)
 
 
 if __name__ == "__main__":

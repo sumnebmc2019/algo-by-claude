@@ -27,7 +27,7 @@ def test_connection():
     try:
         # Initialize SmartAPI
         print("\n1. Initializing SmartAPI...")
-        smart_api = SmartConnect(api_key=angelone_config['api_key'])
+        smart_api = SmartConnect(api_key=angelone_config['api_key'], disable_ssl=True)
         
         # Generate TOTP
         print("2. Generating TOTP...")

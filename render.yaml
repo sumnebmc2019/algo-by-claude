@@ -1,0 +1,103 @@
+# render.yaml - Complete deployment configuration for Render.com
+
+services:
+  # Realtime Trading Bot
+  - type: web
+    name: algo-realtime-bot
+    env: python
+    region: singapore  # Change to your preferred region
+    plan: free  # or starter for always-on
+    branch: main
+    buildCommand: |
+      python -m pip install --upgrade pip
+      pip install -r requirements.txt
+    startCommand: python run_realtime.py
+    envVars:
+      # Python Version
+      - key: PYTHON_VERSION
+        value: "3.11.0"  # Use 3.11 instead of 3.13 for better compatibility
+      
+      # Telegram Configuration
+      - key: TELEGRAM_REALTIME_TOKEN
+        sync: false  # Set in Render dashboard
+      - key: TELEGRAM_REALTIME_CHAT_IDS
+        sync: false
+      - key: TELEGRAM_BACKTEST_TOKEN
+        sync: false
+      - key: TELEGRAM_BACKTEST_CHAT_IDS
+        sync: false
+      
+      # AngelOne Configuration
+      - key: ANGELONE_API_KEY
+        sync: false
+      - key: ANGELONE_CLIENT_ID
+        sync: false
+      - key: ANGELONE_PASSWORD
+        sync: false
+      - key: ANGELONE_TOTP_SECRET
+        sync: false
+      - key: ANGELONE_ENABLED
+        value: "true"
+      
+      # Zerodha Configuration (optional)
+      - key: ZERODHA_API_KEY
+        value: ""
+      - key: ZERODHA_API_SECRET
+        value: ""
+      - key: ZERODHA_ENABLED
+        value: "false"
+      
+      # Environment
+      - key: RENDER_ENVIRONMENT
+        value: "production"
+    
+    healthCheckPath: /health  # We'll create this endpoint
+    
+    # Auto-deploy on push
+    autoDeploy: true
+    
+  # Backtest Bot (Background Worker)
+  - type: worker
+    name: algo-backtest-bot
+    env: python
+    region: singapore
+    plan: free
+    branch: main
+    buildCommand: |
+      python -m pip install --upgrade pip
+      pip install -r requirements.txt
+    startCommand: python run_backtest.py
+    envVars:
+      # Inherit from realtime bot
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: TELEGRAM_REALTIME_TOKEN
+        sync: false
+      - key: TELEGRAM_REALTIME_CHAT_IDS
+        sync: false
+      - key: TELEGRAM_BACKTEST_TOKEN
+        sync: false
+      - key: TELEGRAM_BACKTEST_CHAT_IDS
+        sync: false
+      - key: ANGELONE_API_KEY
+        sync: false
+      - key: ANGELONE_CLIENT_ID
+        sync: false
+      - key: ANGELONE_PASSWORD
+        sync: false
+      - key: ANGELONE_TOTP_SECRET
+        sync: false
+      - key: ANGELONE_ENABLED
+        value: "true"
+      - key: RENDER_ENVIRONMENT
+        value: "production"
+    
+    autoDeploy: true
+
+# Database (optional - for future use)
+# databases:
+#   - name: algo-db
+#     databaseName: algo_trading
+#     user: algo_user
+#     region: singapore
+#     plan: free

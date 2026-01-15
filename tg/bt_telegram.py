@@ -1,6 +1,6 @@
-# config/secrets.yaml
+# tg/bt_telegram.py
 """
-Backtest Bot Telegram Interface
+Backtest Bot Telegram Interface - FIXED VERSION
 """
 
 import asyncio
@@ -25,14 +25,14 @@ class BacktestTelegramBot:
         self.bot_controller = bot_controller
         secrets = load_secrets()
         self.token = secrets['telegram']['backtest']['bot_token']
-        self.chat_ids = secrets['telegram']['backtest']['chat_ids']
+        self.chat_id = secrets['telegram']['backtest']['chat_id']
         self.app = None
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command"""
         keyboard = [
             [InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
-            [InlineKeyboardButton("ℹ️ Stats", callback_data="stats")],
+            [InlineKeyboardButton("📊 Stats", callback_data="stats")],
             [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -52,12 +52,12 @@ class BacktestTelegramBot:
         await query.answer()
         
         keyboard = [
-            [InlineKeyboardButton("📍 Segment/Symbols", callback_data="set_symbols")],
+            [InlineKeyboardButton("📝 Segment/Symbols", callback_data="set_symbols")],
             [InlineKeyboardButton("🏦 Broker", callback_data="set_broker")],
-            [InlineKeyboardButton("₹ Capital", callback_data="set_capital")],
+            [InlineKeyboardButton("💰 Capital", callback_data="set_capital")],
             [InlineKeyboardButton("⚠️ Risk", callback_data="set_risk")],
             [InlineKeyboardButton("🔢 Max Trades", callback_data="set_max_trades")],
-            [InlineKeyboardButton("ℹ️ Strategies", callback_data="set_strategies")],
+            [InlineKeyboardButton("📊 Strategies", callback_data="set_strategies")],
             [InlineKeyboardButton("🔄 Reset State", callback_data="reset_state")],
             [InlineKeyboardButton("« Back", callback_data="main_menu")]
         ]
@@ -68,12 +68,12 @@ class BacktestTelegramBot:
         message = (
             "⚙️ *Backtest Settings*\n\n"
             f"🏦 Broker: `{settings['broker']}`\n"
-            f"📍 Segment: `{settings['segment']}`\n"
-            f"₹ Capital: `{format_number(settings['capital'])}`\n"
+            f"📝 Segment: `{settings['segment']}`\n"
+            f"💰 Capital: `{format_number(settings['capital'])}`\n"
             f"⚠️ Risk: `{settings['risk_per_trade']}%`\n"
             f"🔢 Max Trades: `{settings['max_trades']}`\n"
-            f"ℹ️ Active Strategies: `{len(settings['active_strategies'])}`\n"
-            f" Active Symbols: `{len(settings['active_symbols'])}`\n\n"
+            f"📊 Active Strategies: `{len(settings['active_strategies'])}`\n"
+            f"📈 Active Symbols: `{len(settings['active_symbols'])}`\n\n"
             "_Backtest processes 4 months of data per day_"
         )
         
@@ -90,7 +90,7 @@ class BacktestTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            "ℹ️ *Backtest Statistics*\n\n"
+            "📊 *Backtest Statistics*\n\n"
             f"*Total Trades:* `{stats['total_trades']}`\n"
             f"*Total PnL:* {format_pnl(stats['total_pnl'])}\n\n"
             f"*Win Rate:* `{stats['win_rate']:.2f}%`\n"
@@ -128,12 +128,25 @@ class BacktestTelegramBot:
         query = update.callback_query
         await query.answer()
         
-        # TODO: Implement reset logic in bot controller
-        
-        keyboard = [[InlineKeyboardButton("« Back", callback_data="main_menu")]]
-        reply_markup = InlineKeyboardMarkup(keyboard)
-        
-        message = "✅ *Backtest state reset successfully*\n\nWill start from beginning on next run."
+        # Reset state for all symbols and strategies
+        try:
+            import shutil
+            from pathlib import Path
+            
+            state_dir = Path('data/backtest_state')
+            if state_dir.exists():
+                shutil.rmtree(state_dir)
+                state_dir.mkdir(parents=True, exist_ok=True)
+                
+            keyboard = [[InlineKeyboardButton("« Back", callback_data="main_menu")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            message = "✅ *Backtest state reset successfully*\n\nWill start from beginning on next run."
+        except Exception as e:
+            keyboard = [[InlineKeyboardButton("« Back", callback_data="settings")]]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            message = f"❌ *Failed to reset state*\n\nError: {str(e)}"
         
         await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
     
@@ -202,7 +215,7 @@ class BacktestTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            "📍 *Symbol Selection*\n\n"
+            "📝 *Symbol Selection*\n\n"
             "To add symbols:\n"
             "1. Use command: `/addsymbol SEGMENT SYMBOL`\n"
             "   Example: `/addsymbol NSE_FO NIFTY24JANFUT`\n\n"
@@ -247,7 +260,7 @@ class BacktestTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            f"₹ *Capital Setting*\n\n"
+            f"💰 *Capital Setting*\n\n"
             f"Current capital: {format_number(settings['capital'])}\n\n"
             "To change capital, use command:\n"
             "`/setcapital AMOUNT`\n\n"
@@ -326,7 +339,7 @@ class BacktestTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            f"ℹ️ *Strategy Selection*\n\n"
+            f"📊 *Strategy Selection*\n\n"
             f"Active strategies: {len(active_strategies)}\n\n"
             "Click to toggle strategies:"
         )
@@ -340,7 +353,7 @@ class BacktestTelegramBot:
         
         keyboard = [
             [InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
-            [InlineKeyboardButton("ℹ️ Stats", callback_data="stats")],
+            [InlineKeyboardButton("📊 Stats", callback_data="stats")],
             [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")]
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
@@ -356,11 +369,14 @@ class BacktestTelegramBot:
     
     async def send_notification(self, message: str):
         """Send notification message"""
-        await self.app.bot.send_message(
-            chat_ids=self.chat_ids,
-            text=message,
-            parse_mode='Markdown'
-        )
+        try:
+            await self.app.bot.send_message(
+                chat_id=self.chat_id,
+                text=message,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"Failed to send notification: {e}")
     
     async def send_session_complete(self, stats: Dict[str, Any]):
         """Send session complete notification"""
@@ -504,12 +520,12 @@ class BacktestTelegramBot:
             )
     
     async def list_symbols_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /listsymbols command"""
+        """Handle /listsymbols command - FIXED"""
         active_symbols = self.bot_controller.symbol_manager.get_active_symbols()
         
         if not active_symbols:
             await update.message.reply_text(
-                "📍 *Active Symbols*\n\n"
+                "📝 *Active Symbols*\n\n"
                 "No symbols configured yet.\n\n"
                 "Add symbols using:\n"
                 "`/addsymbol SEGMENT SYMBOL`",
@@ -517,11 +533,15 @@ class BacktestTelegramBot:
             )
             return
         
-        message = "📍 *Active Symbols*\n\n"
+        message = "📝 *Active Symbols*\n\n"
         for sym in active_symbols:
+            # Handle both old and new symbol structure
+            lot_size = sym.get('lot_size') or sym.get('details', {}).get('lotsize', 'N/A')
+            token = sym.get('token') or sym.get('details', {}).get('token', 'N/A')
+            
             message += (
                 f"• `{sym['symbol']}` ({sym['segment']})\n"
-                f"  Lot Size: {sym['lot_size']}, Token: {sym['token']}\n"
+                f"  Lot Size: {lot_size}, Token: {token}\n"
             )
         
         await update.message.reply_text(message, parse_mode='Markdown')

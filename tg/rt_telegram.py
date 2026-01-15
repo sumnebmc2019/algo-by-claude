@@ -1,6 +1,6 @@
-# config/secrets.yaml
+# tg/rt_telegram.py
 """
-Realtime Bot Telegram Interface
+Realtime Bot Telegram Interface - FIXED VERSION
 """
 
 import asyncio
@@ -25,15 +25,15 @@ class RealtimeTelegramBot:
         self.bot_controller = bot_controller
         secrets = load_secrets()
         self.token = secrets['telegram']['realtime']['bot_token']
-        self.chat_ids = secrets['telegram']['realtime']['chat_ids']
+        self.chat_id = secrets['telegram']['realtime']['chat_id']
         self.app = None
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command"""
         keyboard = [
             [InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
-            [InlineKeyboardButton("ℹ️ Stats", callback_data="stats")],
-            [InlineKeyboardButton(" Positions", callback_data="positions")],
+            [InlineKeyboardButton("📊 Stats", callback_data="stats")],
+            [InlineKeyboardButton("📈 Positions", callback_data="positions")],
             [InlineKeyboardButton("🛑 Close All", callback_data="close_all")],
             [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")]
         ]
@@ -52,12 +52,12 @@ class RealtimeTelegramBot:
         await query.answer()
         
         keyboard = [
-            [InlineKeyboardButton("📍 Segment/Symbols", callback_data="set_symbols")],
+            [InlineKeyboardButton("📝 Segment/Symbols", callback_data="set_symbols")],
             [InlineKeyboardButton("🏦 Broker", callback_data="set_broker")],
-            [InlineKeyboardButton("₹ Capital", callback_data="set_capital")],
+            [InlineKeyboardButton("💰 Capital", callback_data="set_capital")],
             [InlineKeyboardButton("⚠️ Risk", callback_data="set_risk")],
             [InlineKeyboardButton("🔢 Max Trades", callback_data="set_max_trades")],
-            [InlineKeyboardButton("ℹ️ Strategies", callback_data="set_strategies")],
+            [InlineKeyboardButton("📊 Strategies", callback_data="set_strategies")],
             [InlineKeyboardButton("🔄 Paper/Live", callback_data="toggle_mode")],
             [InlineKeyboardButton("« Back", callback_data="main_menu")]
         ]
@@ -68,13 +68,13 @@ class RealtimeTelegramBot:
         message = (
             "⚙️ *Current Settings*\n\n"
             f"🏦 Broker: `{settings['broker']}`\n"
-            f"📍 Segment: `{settings['segment']}`\n"
-            f"₹ Capital: `{format_number(settings['capital'])}`\n"
+            f"📝 Segment: `{settings['segment']}`\n"
+            f"💰 Capital: `{format_number(settings['capital'])}`\n"
             f"⚠️ Risk: `{settings['risk_per_trade']}%`\n"
             f"🔢 Max Trades: `{settings['max_trades']}`\n"
             f"🔄 Mode: `{settings['mode'].upper()}`\n"
-            f"ℹ️ Active Strategies: `{len(settings['active_strategies'])}`\n"
-            f" Active Symbols: `{len(settings['active_symbols'])}`\n"
+            f"📊 Active Strategies: `{len(settings['active_strategies'])}`\n"
+            f"📈 Active Symbols: `{len(settings['active_symbols'])}`\n"
         )
         
         await query.edit_message_text(message, reply_markup=reply_markup, parse_mode='Markdown')
@@ -90,7 +90,7 @@ class RealtimeTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            "ℹ️ *Statistics & Performance*\n\n"
+            "📊 *Statistics & Performance*\n\n"
             f"*Open Positions:* `{stats['open_positions']}`\n"
             f"*Closed Positions:* `{stats['closed_positions']}`\n\n"
             f"*Realized PnL:* {format_pnl(stats['realized_pnl'])}\n"
@@ -114,9 +114,9 @@ class RealtimeTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         if not positions:
-            message = " *Open Positions*\n\nNo open positions"
+            message = "📈 *Open Positions*\n\nNo open positions"
         else:
-            message = " *Open Positions*\n\n"
+            message = "📈 *Open Positions*\n\n"
             for pos in positions:
                 ltp = self.bot_controller.get_ltp(pos['symbol'])
                 current_pnl = self.bot_controller.calculate_position_pnl(pos, ltp)
@@ -263,7 +263,7 @@ class RealtimeTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            "📍 *Symbol Selection*\n\n"
+            "📝 *Symbol Selection*\n\n"
             "To add symbols:\n"
             "1. Use command: `/addsymbol SEGMENT SYMBOL`\n"
             "   Example: `/addsymbol NSE_FO NIFTY24JANFUT`\n\n"
@@ -308,7 +308,7 @@ class RealtimeTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            f"₹ *Capital Setting*\n\n"
+            f"💰 *Capital Setting*\n\n"
             f"Current capital: {format_number(settings['capital'])}\n\n"
             "To change capital, use command:\n"
             "`/setcapital AMOUNT`\n\n"
@@ -387,7 +387,7 @@ class RealtimeTelegramBot:
         reply_markup = InlineKeyboardMarkup(keyboard)
         
         message = (
-            f"ℹ️ *Strategy Selection*\n\n"
+            f"📊 *Strategy Selection*\n\n"
             f"Active strategies: {len(active_strategies)}\n\n"
             "Click to toggle strategies:"
         )
@@ -404,11 +404,11 @@ class RealtimeTelegramBot:
         
         keyboard = [
             [InlineKeyboardButton(
-                f"{'[+]' if current_mode == 'paper' else '[=]'} Paper Trading",
+                f"{'🟢' if current_mode == 'paper' else '⚪'} Paper Trading",
                 callback_data="mode_paper"
             )],
             [InlineKeyboardButton(
-                f"{'[-]' if current_mode == 'live' else '[=]'} Live Trading",
+                f"{'🔴' if current_mode == 'live' else '⚪'} Live Trading",
                 callback_data="mode_live"
             )],
             [InlineKeyboardButton("« Back", callback_data="settings")]
@@ -432,8 +432,8 @@ class RealtimeTelegramBot:
         
         keyboard = [
             [InlineKeyboardButton("⚙️ Settings", callback_data="settings")],
-            [InlineKeyboardButton("ℹ️ Stats", callback_data="stats")],
-            [InlineKeyboardButton(" Positions", callback_data="positions")],
+            [InlineKeyboardButton("📊 Stats", callback_data="stats")],
+            [InlineKeyboardButton("📈 Positions", callback_data="positions")],
             [InlineKeyboardButton("🛑 Close All", callback_data="close_all")],
             [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")]
         ]
@@ -449,7 +449,7 @@ class RealtimeTelegramBot:
     async def send_trade_notification(self, trade_data: Dict[str, Any]):
         """Send trade notification"""
         message = (
-            f"{'' if trade_data['action'] == 'BUY' else ''} *Trade Alert*\n\n"
+            f"{'📈' if trade_data['action'] == 'BUY' else '📉'} *Trade Alert*\n\n"
             f"Symbol: `{trade_data['symbol']}`\n"
             f"Action: `{trade_data['action']}`\n"
             f"Quantity: `{trade_data['quantity']}`\n"
@@ -458,11 +458,14 @@ class RealtimeTelegramBot:
             f"Mode: `{trade_data['mode'].upper()}`\n"
         )
         
-        await self.app.bot.send_message(
-            chat_ids=self.chat_ids,
-            text=message,
-            parse_mode='Markdown'
-        )
+        try:
+            await self.app.bot.send_message(
+                chat_id=self.chat_id,
+                text=message,
+                parse_mode='Markdown'
+            )
+        except Exception as e:
+            logger.error(f"Failed to send notification: {e}")
     
     def start(self):
         """Start the telegram bot (deprecated - use start_async)"""
@@ -593,12 +596,12 @@ class RealtimeTelegramBot:
             )
     
     async def list_symbols_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Handle /listsymbols command"""
+        """Handle /listsymbols command - FIXED"""
         active_symbols = self.bot_controller.symbol_manager.get_active_symbols()
         
         if not active_symbols:
             await update.message.reply_text(
-                "📍 *Active Symbols*\n\n"
+                "📝 *Active Symbols*\n\n"
                 "No symbols configured yet.\n\n"
                 "Add symbols using:\n"
                 "`/addsymbol SEGMENT SYMBOL`",
@@ -606,11 +609,15 @@ class RealtimeTelegramBot:
             )
             return
         
-        message = "📍 *Active Symbols*\n\n"
+        message = "📝 *Active Symbols*\n\n"
         for sym in active_symbols:
+            # Handle both old and new symbol structure
+            lot_size = sym.get('lot_size') or sym.get('details', {}).get('lotsize', 'N/A')
+            token = sym.get('token') or sym.get('details', {}).get('token', 'N/A')
+            
             message += (
                 f"• `{sym['symbol']}` ({sym['segment']})\n"
-                f"  Lot Size: {sym['lot_size']}, Token: {sym['token']}\n"
+                f"  Lot Size: {lot_size}, Token: {token}\n"
             )
         
         await update.message.reply_text(message, parse_mode='Markdown')

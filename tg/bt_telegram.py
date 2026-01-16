@@ -25,7 +25,7 @@ class BacktestTelegramBot:
         self.bot_controller = bot_controller
         secrets = load_secrets()
         self.token = secrets['telegram']['backtest']['bot_token']
-        self.chat_id = secrets['telegram']['backtest']['chat_id']
+        self.chat_ids = secrets['telegram']['backtest']['chat_ids']
         self.app = None
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -371,7 +371,7 @@ class BacktestTelegramBot:
         """Send notification message"""
         try:
             await self.app.bot.send_message(
-                chat_id=self.chat_id,
+                chat_ids=self.chat_ids,
                 text=message,
                 parse_mode='Markdown'
             )
